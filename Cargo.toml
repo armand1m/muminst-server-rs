@@ -4,8 +4,20 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-warp = "0.3"
-tokio = { version = "1.12.0", features = ["full"] }
-serenity = { default-features = false, features = ["client", "gateway", "model", 
-"rustls_backend", "standard_framework", "voice", "cache"], version = "0.10.9"}
-songbird = { version = "0.2.0"}
+songbird = {version = "0.2.0"}
+dotenv = {version = "0.15.0"}
+tokio = {version = "1.9.0", features = ["full"]}
+actix-web = "4.0.0-beta.8" 
+
+[dependencies.serenity]
+default-features = false
+features = [
+    "client",
+    "gateway",
+    "model",
+    "rustls_backend",
+    "standard_framework",
+    "voice",
+    "cache",
+]
+version = "0.10.9"
