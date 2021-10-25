@@ -4,7 +4,7 @@ mod handlers;
 
 use dotenv;
 use songbird::SerenityInit;
-use std::env;
+use std::{env, sync::{Arc, Mutex}};
 
 use serenity::{client::Client, framework::StandardFramework};
 
@@ -12,6 +12,8 @@ use actix_web::{web, App, HttpServer};
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
 use handlers::index;
+
+use crate::discord::ContextStore;
 
 fn main() {
     dotenv::dotenv().ok();
@@ -43,6 +45,11 @@ async fn async_main() {
         .expect("Error while creating discord client.");
 
     tokio::spawn(async move {
+        {
+            let data = client.data.read().await;
+            let ctx = data.get::<ContextStore>();
+        }
+
         client
             .start()
             .await
@@ -54,7 +61,7 @@ async fn async_main() {
 
         App::new()
             .wrap(actix_web::middleware::Logger::default())
-            .app_data(web::Data::new(AppState { app_name }))
+            .app_data(web::Data::new(AppState { app_name, ctx }))
             .service(index)
     })
     .bind("0.0.0.0:8080")
