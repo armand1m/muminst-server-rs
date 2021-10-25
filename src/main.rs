@@ -2,16 +2,29 @@ mod app_state;
 mod discord;
 mod handlers;
 
+#[macro_use]
+extern crate lazy_static;
+
 use dotenv;
 use songbird::SerenityInit;
-use std::env;
+use std::{
+    env,
+    sync::{Arc, Mutex},
+};
 
-use serenity::{client::Client, framework::StandardFramework};
+use serenity::{
+    client::{Client, Context},
+    framework::StandardFramework,
+};
 
 use actix_web::{web, App, HttpServer};
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
 use handlers::index;
+
+lazy_static! {
+    pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
+}
 
 fn main() {
     dotenv::dotenv().ok();
@@ -54,7 +67,10 @@ async fn async_main() {
 
         App::new()
             .wrap(actix_web::middleware::Logger::default())
-            .app_data(web::Data::new(AppState { app_name }))
+            .app_data(web::Data::new(AppState {
+                app_name,
+                discord_ctx: DISCORD_CTX.to_owned(),
+            }))
             .service(index)
     })
     .bind("0.0.0.0:8080")
