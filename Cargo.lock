@@ -1090,6 +1090,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "dotenv",
+ "lazy_static",
  "serenity",
  "songbird",
  "tokio",
