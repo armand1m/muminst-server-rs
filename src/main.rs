@@ -33,30 +33,32 @@ async fn async_main() {
         .configure(|c| c.prefix("~"))
         .group(&BOTCOMMANDS_GROUP);
 
+    let event_handler = DiscordHandler {};
+
     let mut client = Client::builder(&token)
-        .event_handler(DiscordHandler)
+        .event_handler(event_handler)
         .framework(framework)
         .register_songbird()
         .await
-        .expect("Err creating client");
+        .expect("Error while creating discord client.");
 
     tokio::spawn(async move {
-        let _ = client
+        client
             .start()
             .await
-            .map_err(|reason| eprintln!("Discord Client ended: {:?}", reason));
+            .map_err(|reason| eprintln!("Discord client connection was terminated: {:?}", reason))
     });
 
-    HttpServer::new(|| {
+    HttpServer::new(move || {
+        let app_name = String::from("muminst-server-rust");
+
         App::new()
             .wrap(actix_web::middleware::Logger::default())
-            .app_data(web::Data::new(AppState {
-                app_name: String::from("muminst-server-rust"),
-            }))
+            .app_data(web::Data::new(AppState { app_name }))
             .service(index)
     })
     .bind("0.0.0.0:8080")
-    .expect("Failed to bind server to 0.0.0.0:8080")
+    .expect("Failed to bind http server to 0.0.0.0:8080")
     .run()
     .await
     .unwrap();

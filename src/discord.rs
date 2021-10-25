@@ -5,7 +5,6 @@ use serenity::{
     client::{Context, EventHandler},
     model::gateway::Ready,
 };
-
 pub struct DiscordHandler;
 
 #[async_trait]
