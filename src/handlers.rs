@@ -47,9 +47,12 @@ pub async fn play_sound(data: Data<AppState>) -> Result<String, Error> {
         let mut handler = handler_lock.lock().await;
 
         let song_src = Compressed::new(
-            input::ffmpeg("/Users/amagalhaes/Projects/Experiments/muminst-rust-server/data/audio/ecbcecb6-e82b-4aeb-8716-8f39b0446d36.mp3").await.expect("Link may be dead."),
+            input::ffmpeg("data/audio/ecbcecb6-e82b-4aeb-8716-8f39b0446d36.mp3")
+                .await
+                .expect("Link may be dead."),
             Bitrate::BitsPerSecond(128_000),
-        ).expect("These parameters are well-defined.");
+        )
+        .expect("These parameters are well-defined.");
 
         let song = handler.play_source(song_src.into());
         let _ = song.set_volume(0.8);
