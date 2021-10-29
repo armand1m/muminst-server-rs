@@ -20,7 +20,7 @@ use serenity::{
 use actix_web::{web, App, HttpServer};
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
-use handlers::index;
+use handlers::{index, play_sound};
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -72,6 +72,7 @@ async fn async_main() {
                 discord_ctx: DISCORD_CTX.to_owned(),
             }))
             .service(index)
+            .service(play_sound)
     })
     .bind("0.0.0.0:8080")
     .expect("Failed to bind http server to 0.0.0.0:8080")
