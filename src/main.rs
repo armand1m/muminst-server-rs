@@ -1,6 +1,7 @@
 mod app_state;
 mod discord;
 mod handlers;
+mod storage;
 
 #[macro_use]
 extern crate lazy_static;

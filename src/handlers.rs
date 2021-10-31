@@ -8,7 +8,7 @@ use actix_web::{
 use serde::{Deserialize, Serialize};
 use serenity::model::id::{ChannelId, GuildId};
 
-use crate::app_state::AppState;
+use crate::{app_state::AppState, storage::get_audio_path};
 
 use songbird::{
     driver::Bitrate,
@@ -78,14 +78,20 @@ pub async fn play_sound(
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
+        // TODO: fetch audio folder path from env var
         let audio_folder_path = Path::new("data/audio");
+        let audio_path = get_audio_path(audio_folder_path, json.sound_id.clone());
 
-        // TODO: Check if file exist before sending it to ffmpeg
-        // For some reason the ffmpeg does not check for that
+        if !audio_path.exists() {
+            return Ok(
+                HttpResponse::InternalServerError().json(PlaySoundErrorPayload {
+                    message: format!("Audio is missing for sound with id: {}", json.sound_id),
+                }),
+            );
+        }
+
         let sound_src = Compressed::new(
-            input::ffmpeg(audio_folder_path.join("ecbcecb6-e82b-4aeb-8716-8f39b0446d36.mp3"))
-                .await
-                .expect("Link may be dead."),
+            input::ffmpeg(audio_path).await.expect("Link may be dead."),
             Bitrate::BitsPerSecond(128_000),
         )
         .expect("ffmpeg parameters to be properly defined");
