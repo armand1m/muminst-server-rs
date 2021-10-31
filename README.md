@@ -6,8 +6,8 @@ This is currently a work in progress, and many features are still unstable. Foll
 
 - [x] dotenv 
 - [x] Logger
-- [ ] Storage
-- [-] Modularized
+- [-] Storage
+- [x] Modularized
 - [-] HTTP Server
     - [ ] GET /sounds
     - [x] GET /assets
