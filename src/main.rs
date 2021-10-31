@@ -17,6 +17,7 @@ use serenity::{
     framework::StandardFramework,
 };
 
+use actix_files::Files;
 use actix_web::{web, App, HttpServer};
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
@@ -73,6 +74,7 @@ async fn async_main() {
             }))
             .service(index)
             .service(play_sound)
+            .service(Files::new("/assets", "./data/audio"))
     })
     .bind("0.0.0.0:8080")
     .expect("Failed to bind http server to 0.0.0.0:8080")

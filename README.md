@@ -10,7 +10,7 @@ This is currently a work in progress, and many features are still unstable. Foll
 - [-] Modularized
 - [-] HTTP Server
     - [ ] GET /sounds
-    - [ ] GET /assets
+    - [x] GET /assets
     - [ ] GET /download-sounds
     - [-] POST /play-sound
     - [ ] POST /upload
