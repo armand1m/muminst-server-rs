@@ -1091,6 +1091,7 @@ dependencies = [
  "actix-web",
  "dotenv",
  "lazy_static",
+ "serde",
  "serenity",
  "songbird",
  "tokio",

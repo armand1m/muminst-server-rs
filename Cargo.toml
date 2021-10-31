@@ -9,6 +9,7 @@ dotenv = {version = "0.15.0"}
 tokio = {version = "1.9.0", features = ["full"]}
 actix-web = "4.0.0-beta.8"
 lazy_static = "1.4.0"
+serde = "1.0.130"
 
 [dependencies.serenity]
 default-features = false

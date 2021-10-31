@@ -11,13 +11,13 @@ This is currently a work in progress, and many features are still unstable. Foll
 - [-] HTTP Server
     - [ ] GET /sounds
     - [ ] GET /assets
-    - [ ] GET /downloads-sounds
-    - [ ] POST /play-sound
+    - [ ] GET /download-sounds
+    - [-] POST /play-sound
     - [ ] POST /upload
     - [ ] POST /add-tags/:id
 - [ ] Websocket Server
     - [ ] /ws route
         - [ ] Notifies locked state to clients
         - [ ] Manages connections correctly
-- [-] Discord Client
-    - [ ] Enable consumers to play audio outside of a command function. _(e.g.: from an endpoint handler)_
+- [x] Discord Client
+    - [x] Enable consumers to play audio outside of a command function. _(e.g.: from an endpoint handler)_
