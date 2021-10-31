@@ -3,19 +3,19 @@ table! {
         id -> Text,
         name -> Text,
         extension -> Text,
-        fileName -> Text,
-        fileHash -> Text,
+        file_name -> Text,
+        file_hash -> Text,
     }
 }
 
 table! {
-    tags (id, soundId, slug) {
+    tags (id, sound_id, slug) {
         id -> Text,
-        soundId -> Text,
+        sound_id -> Text,
         slug -> Text,
     }
 }
 
-joinable!(tags -> sounds (soundId));
+joinable!(tags -> sounds (sound_id));
 
 allow_tables_to_appear_in_same_query!(sounds, tags,);

@@ -29,7 +29,7 @@ use app_state::AppState;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
-use handlers::{index, play_sound};
+use handlers::{index::index_handler, sounds::play_sound_handler};
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -87,8 +87,8 @@ async fn async_main() {
                 discord_ctx: DISCORD_CTX.to_owned(),
                 database_connection,
             }))
-            .service(index)
-            .service(play_sound)
+            .service(index_handler)
+            .service(play_sound_handler)
             .service(Files::new("/assets", "./data/audio"))
     })
     .bind("0.0.0.0:8080")

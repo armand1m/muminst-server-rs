@@ -1,10 +1,10 @@
 -- Your SQL goes here
 CREATE TABLE tags (
 	id TEXT NOT NULL UNIQUE,
-    soundId TEXT NOT NULL,
+    sound_id TEXT NOT NULL,
     slug TEXT NOT NULL,
-    PRIMARY KEY (id, soundId, slug),
-    FOREIGN KEY (soundId) 
+    PRIMARY KEY (id, sound_id, slug),
+    FOREIGN KEY (sound_id) 
         REFERENCES sounds (id) 
             ON DELETE CASCADE 
             ON UPDATE NO ACTION
