@@ -1,11 +1,17 @@
-mod app_state;
-mod discord;
-mod handlers;
-mod storage;
-
 #[macro_use]
 extern crate lazy_static;
 
+#[macro_use]
+extern crate diesel;
+
+mod app_state;
+mod discord;
+mod handlers;
+pub mod models;
+pub mod schema;
+mod storage;
+
+use diesel_migrations::run_pending_migrations;
 use dotenv;
 use songbird::SerenityInit;
 use std::{
@@ -19,10 +25,16 @@ use serenity::{
 };
 
 use actix_files::Files;
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware::Logger, web::Data, App, HttpServer};
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
+
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
-use handlers::{index, play_sound};
+use handlers::{
+    index::index_handler,
+    sounds::{play_sound_handler, sounds_handler},
+};
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -42,7 +54,10 @@ fn main() {
 }
 
 async fn async_main() {
-    let token = env::var("DISCORD_TOKEN").expect("Expected a discord token in the environment");
+    let token =
+        env::var("DISCORD_TOKEN").expect("Expected a DISCORD_TOKEN to be set in the environment");
+    let database_url =
+        env::var("DATABASE_URL").expect("Expected DATABASE_URL to be set in the environment");
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~"))
@@ -65,16 +80,23 @@ async fn async_main() {
     });
 
     HttpServer::new(move || {
-        let app_name = String::from("muminst-server-rust");
+        let app_name = "muminst-server-rust".to_string();
+
+        let database_connection = SqliteConnection::establish(&database_url)
+            .expect(&format!("Error connecting to {}", database_url));
+
+        run_pending_migrations(&database_connection).expect("Failed to run pending migrations.");
 
         App::new()
-            .wrap(actix_web::middleware::Logger::default())
-            .app_data(web::Data::new(AppState {
+            .wrap(Logger::default())
+            .app_data(Data::new(AppState {
                 app_name,
                 discord_ctx: DISCORD_CTX.to_owned(),
+                database_connection,
             }))
-            .service(index)
-            .service(play_sound)
+            .service(index_handler)
+            .service(sounds_handler)
+            .service(play_sound_handler)
             .service(Files::new("/assets", "./data/audio"))
     })
     .bind("0.0.0.0:8080")
