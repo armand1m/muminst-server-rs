@@ -137,37 +137,34 @@ pub async fn play_sound_handler(
 
 #[post("/upload")]
 async fn upload_handler(mut payload: Multipart) -> Result<HttpResponse, Error> {
-    // iterate over multipart stream
+    // TODO: make sure to only run this loop for files
+    // in the multipart request. Currently it is also
+    // considering things that are not files (e.g. tags)
     while let Some(mut field) = payload.try_next().await? {
         // A multipart/form-data stream has to contain `content_disposition`
-        // TODO: Figure out a better way to handle this with less boilerplate
-        let _content_disposition = match field.content_disposition() {
-            Some(value) => value,
-            None => {
-                return Ok(HttpResponse::BadRequest().json(ErrorPayload {
-                    message: "Content disposition is missing.".to_string(),
-                }));
-            }
-        };
+        field
+            .content_disposition()
+            .expect("Content disposition is missing");
 
         let filename = Uuid::new_v4().to_string();
-        let filepath = format!("./tmp/{}", filename);
+        let audio_folder_path = Path::new("data/audio");
+        let filepath = audio_folder_path.join(filename);
 
         // File::create is blocking operation, use threadpool
-        let mut f = web::block(|| File::create(filepath)).await.unwrap()?;
+        let mut file = web::block(|| File::create(filepath)).await.unwrap()?;
 
         // Field in turn is stream of *Bytes* object
         while let Some(chunk) = field.try_next().await? {
             // filesystem operations are blocking, we have to use threadpool
-            f = web::block(move || f.write_all(&chunk).map(|_| f))
+            file = web::block(move || file.write_all(&chunk).map(|_| file))
                 .await
                 .unwrap()?;
         }
     }
 
     Ok(HttpResponse::Ok().json(UploadResponse {
-        successful: [].to_vec(),
-        failed: [].to_vec(),
-        tags: [].to_vec(),
+        successful: vec![],
+        failed: vec![],
+        tags: vec![],
     }))
 }

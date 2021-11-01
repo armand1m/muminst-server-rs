@@ -26,7 +26,7 @@ use serenity::{
 
 use actix_cors::Cors;
 use actix_files::Files;
-use actix_web::{http, middleware::Logger, web::Data, App, HttpServer};
+use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
