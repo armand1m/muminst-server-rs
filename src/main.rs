@@ -24,8 +24,9 @@ use serenity::{
     framework::StandardFramework,
 };
 
+use actix_cors::Cors;
 use actix_files::Files;
-use actix_web::{middleware::Logger, web::Data, App, HttpServer};
+use actix_web::{http, middleware::Logger, web::Data, App, HttpServer};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
@@ -33,7 +34,7 @@ use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
 use handlers::{
     index::index_handler,
-    sounds::{play_sound_handler, sounds_handler},
+    sounds::{play_sound_handler, sounds_handler, upload_handler},
 };
 
 lazy_static! {
@@ -87,8 +88,16 @@ async fn async_main() {
 
         run_pending_migrations(&database_connection).expect("Failed to run pending migrations.");
 
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_header()
+            .allow_any_method();
+
+        let logger = Logger::default();
+
         App::new()
-            .wrap(Logger::default())
+            .wrap(cors)
+            .wrap(logger)
             .app_data(Data::new(AppState {
                 app_name,
                 discord_ctx: DISCORD_CTX.to_owned(),
@@ -96,6 +105,7 @@ async fn async_main() {
             }))
             .service(index_handler)
             .service(sounds_handler)
+            .service(upload_handler)
             .service(play_sound_handler)
             .service(Files::new("/assets", "./data/audio"))
     })

@@ -1,13 +1,15 @@
+use actix_multipart::Multipart;
 use diesel::prelude::*;
-use std::path::Path;
+use std::{fs::File, io::Write, path::Path};
+use uuid::Uuid;
 
 use actix_web::{
     get, post,
-    web::{Data, Json},
+    web::{self, Data, Json},
     Error, HttpResponse,
 };
 use serde::{Deserialize, Serialize};
-use serenity::model::id::GuildId;
+use serenity::{futures::TryStreamExt, model::id::GuildId};
 use songbird::{
     driver::Bitrate,
     input::{self, cached::Compressed},
@@ -40,6 +42,28 @@ pub struct ErrorPayload {
 pub struct PlaySoundResponse {
     sound_id: String,
     client: Client,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadSuccess {
+    id: String,
+    filename: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadFailure {
+    filename: String,
+    reason: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadResponse {
+    successful: Vec<UploadSuccess>,
+    failed: Vec<UploadFailure>,
+    tags: Vec<String>,
 }
 
 #[get("/sounds")]
@@ -108,5 +132,42 @@ pub async fn play_sound_handler(
     Ok(HttpResponse::Ok().json(PlaySoundResponse {
         sound_id: json.sound_id.to_owned(),
         client: json.client.to_owned(),
+    }))
+}
+
+#[post("/upload")]
+async fn upload_handler(mut payload: Multipart) -> Result<HttpResponse, Error> {
+    // iterate over multipart stream
+    while let Some(mut field) = payload.try_next().await? {
+        // A multipart/form-data stream has to contain `content_disposition`
+        // TODO: Figure out a better way to handle this with less boilerplate
+        let _content_disposition = match field.content_disposition() {
+            Some(value) => value,
+            None => {
+                return Ok(HttpResponse::BadRequest().json(ErrorPayload {
+                    message: "Content disposition is missing.".to_string(),
+                }));
+            }
+        };
+
+        let filename = Uuid::new_v4().to_string();
+        let filepath = format!("./tmp/{}", filename);
+
+        // File::create is blocking operation, use threadpool
+        let mut f = web::block(|| File::create(filepath)).await.unwrap()?;
+
+        // Field in turn is stream of *Bytes* object
+        while let Some(chunk) = field.try_next().await? {
+            // filesystem operations are blocking, we have to use threadpool
+            f = web::block(move || f.write_all(&chunk).map(|_| f))
+                .await
+                .unwrap()?;
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(UploadResponse {
+        successful: [].to_vec(),
+        failed: [].to_vec(),
+        tags: [].to_vec(),
     }))
 }

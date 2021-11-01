@@ -6,14 +6,14 @@ This is currently a work in progress, and many features are still unstable. Foll
 
 - [x] dotenv 
 - [x] Logger
-- [-] Storage
+- [x] Storage
 - [x] Modularized
 - [-] HTTP Server
     - [ ] GET /sounds
     - [x] GET /assets
     - [ ] GET /download-sounds
     - [-] POST /play-sound
-    - [ ] POST /upload
+    - [-] POST /upload
     - [ ] POST /add-tags/:id
 - [ ] Websocket Server
     - [ ] /ws route
