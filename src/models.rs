@@ -1,6 +1,8 @@
 use crate::schema::{sounds, tags};
 
-#[derive(Queryable, Associations, Identifiable)]
+use serde::{Deserialize, Serialize};
+#[derive(Queryable, Associations, Identifiable, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Sound {
     pub id: String,
     pub name: String,
@@ -9,7 +11,8 @@ pub struct Sound {
     pub file_hash: String,
 }
 
-#[derive(Queryable, Associations, Identifiable)]
+#[derive(Queryable, Associations, Identifiable, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 #[belongs_to(Sound)]
 pub struct Tag {
     pub id: String,

@@ -11,6 +11,7 @@ pub mod models;
 pub mod schema;
 mod storage;
 
+use diesel_migrations::run_pending_migrations;
 use dotenv;
 use songbird::SerenityInit;
 use std::{
@@ -24,12 +25,16 @@ use serenity::{
 };
 
 use actix_files::Files;
-use actix_web::{web, App, HttpServer};
-use app_state::AppState;
+use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
+
+use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
-use handlers::{index::index_handler, sounds::play_sound_handler};
+use handlers::{
+    index::index_handler,
+    sounds::{play_sound_handler, sounds_handler},
+};
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -80,14 +85,17 @@ async fn async_main() {
         let database_connection = SqliteConnection::establish(&database_url)
             .expect(&format!("Error connecting to {}", database_url));
 
+        run_pending_migrations(&database_connection).expect("Failed to run pending migrations.");
+
         App::new()
-            .wrap(actix_web::middleware::Logger::default())
-            .app_data(web::Data::new(AppState {
+            .wrap(Logger::default())
+            .app_data(Data::new(AppState {
                 app_name,
                 discord_ctx: DISCORD_CTX.to_owned(),
                 database_connection,
             }))
             .service(index_handler)
+            .service(sounds_handler)
             .service(play_sound_handler)
             .service(Files::new("/assets", "./data/audio"))
     })

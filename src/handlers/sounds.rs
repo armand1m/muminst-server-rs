@@ -1,7 +1,8 @@
+use diesel::prelude::*;
 use std::path::Path;
 
 use actix_web::{
-    post,
+    get, post,
     web::{Data, Json},
     Error, HttpResponse,
 };
@@ -12,7 +13,7 @@ use songbird::{
     input::{self, cached::Compressed},
 };
 
-use crate::{app_state::AppState, storage::get_audio_path};
+use crate::{app_state::AppState, models::Sound, schema::sounds, storage::get_audio_path};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +31,7 @@ pub struct PlaySoundPayload {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlaySoundErrorPayload {
+pub struct ErrorPayload {
     message: String,
 }
 
@@ -39,6 +40,24 @@ pub struct PlaySoundErrorPayload {
 pub struct PlaySoundResponse {
     sound_id: String,
     client: Client,
+}
+
+#[get("/sounds")]
+pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error> {
+    let database_connection = &data.database_connection;
+    // TODO: fetch tags as well, add left_join
+    let query = sounds::table;
+    let sounds = match query.load::<Sound>(database_connection) {
+        Ok(sounds) => sounds,
+        Err(reason) => {
+            eprintln!("Failed to fetch sounds from database. Reason: {:?}", reason);
+            return Ok(HttpResponse::InternalServerError().json(ErrorPayload {
+                message: "Server failed to fetch sounds from database.".to_string(),
+            }));
+        }
+    };
+
+    Ok(HttpResponse::Ok().json(sounds))
 }
 
 #[post("/play-sound")]
@@ -67,11 +86,9 @@ pub async fn play_sound_handler(
         let audio_path = get_audio_path(audio_folder_path, json.sound_id.clone());
 
         if !audio_path.exists() {
-            return Ok(
-                HttpResponse::InternalServerError().json(PlaySoundErrorPayload {
-                    message: format!("Audio is missing for sound with id: {}", json.sound_id),
-                }),
-            );
+            return Ok(HttpResponse::InternalServerError().json(ErrorPayload {
+                message: format!("Audio is missing for sound with id: {}", json.sound_id),
+            }));
         }
 
         let sound_src = Compressed::new(
@@ -83,7 +100,7 @@ pub async fn play_sound_handler(
         let track = handler.play_source(sound_src.into());
         let _ = track.set_volume(0.8);
     } else {
-        return Ok(HttpResponse::BadRequest().json(PlaySoundErrorPayload {
+        return Ok(HttpResponse::BadRequest().json(ErrorPayload {
             message: "Bot has to join a voice channel first.".to_string(),
         }));
     }
