@@ -1,4 +1,4 @@
-use actix_multipart::Multipart;
+use actix_multipart::{Field, Multipart};
 use diesel::{insert_into, prelude::*};
 use std::{fs::File, io::Write, path::Path};
 use uuid::Uuid;
@@ -136,6 +136,63 @@ pub async fn play_sound_handler(
     }))
 }
 
+async fn upload_payload_file(
+    mut field: Field,
+    payload_filename: &str,
+    audio_folder_path: &Path,
+    database_connection: &SqliteConnection,
+) -> Result<UploadSuccess, Error> {
+    let original_filename = Path::new(payload_filename);
+    let extension = original_filename
+        .extension()
+        .expect("File extension to be extractable")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let file_name = Uuid::new_v4().to_string();
+    let mut filepath = audio_folder_path.join(&file_name);
+    filepath.set_extension(&extension);
+
+    let mut file = web::block(|| File::create(filepath))
+        .await
+        .expect("Failed to create file")?;
+
+    while let Some(chunk) = field.try_next().await? {
+        // filesystem operations are blocking, we have to use threadpool
+        file = web::block(move || file.write_all(&chunk).map(|_| file))
+            .await
+            .expect("Failed to write to file")?;
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let sound_name = original_filename
+        .file_stem()
+        .expect("Failed to get file stem")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let sound_record = Sound {
+        id,
+        file_name,
+        extension: format!(".{}", extension),
+        // TODO: introduce a proper hashing mechanism
+        file_hash: "hash".to_string(),
+        name: sound_name,
+    };
+
+    insert_into(sounds_dsl)
+        .values(&sound_record)
+        .execute(database_connection)
+        .expect("Failed to insert sound in database.");
+
+    Ok(UploadSuccess {
+        id: sound_record.id.clone(),
+        filename: payload_filename.to_string(),
+    })
+}
+
 #[post("/upload")]
 async fn upload_handler(
     mut payload: Multipart,
@@ -144,16 +201,16 @@ async fn upload_handler(
     let _valid_extensions = vec!["mp3", "wav", "ogg", "webm"];
     let audio_folder_path = Path::new("data/audio");
 
-    // TODO: make sure to only run this loop for files
-    // in the multipart request. Currently it is also
-    // considering things that are not files (e.g. tags)
-    while let Some(mut field) = payload.try_next().await? {
+    let mut successful_uploads: Vec<UploadSuccess> = vec![];
+    let mut failed_uploads: Vec<UploadFailure> = vec![];
+
+    while let Some(field) = payload.try_next().await? {
         // A multipart/form-data stream has to contain `content_disposition`
         // this is where we'll be able to fetch the file name and
         // the key name for other parts of the payload
         let content_disposition = field
             .content_disposition()
-            .expect("Content disposition is missing");
+            .expect("Content disposition to be present");
 
         // TODO: Check if content type is among the allowed ones
         // make sure to check the magic number of the payload buf
@@ -164,60 +221,37 @@ async fn upload_handler(
         let _content_type = field.content_type();
         let field_key = content_disposition
             .get_name()
-            .expect("file does not have a name");
+            .expect("Content disposition to have a name");
 
         if field_key == "tags" {
             // TODO: insert tags to database
             break;
         }
 
-        let original_file_name = Path::new(field_key);
-        let file_name = Uuid::new_v4().to_string();
-        let filepath = audio_folder_path.join(&file_name);
+        let payload_filename = content_disposition
+            .get_filename()
+            .expect("Uploaded file to always contain a filename.");
 
-        let mut file = web::block(|| File::create(filepath))
-            .await
-            .expect("Failed to create file")?;
+        let upload_result = upload_payload_file(
+            field,
+            payload_filename,
+            audio_folder_path,
+            &data.database_connection,
+        )
+        .await;
 
-        while let Some(chunk) = field.try_next().await? {
-            // filesystem operations are blocking, we have to use threadpool
-            file = web::block(move || file.write_all(&chunk).map(|_| file))
-                .await
-                .expect("Failed to write to file")?;
+        match upload_result {
+            Ok(successful) => successful_uploads.push(successful),
+            Err(failure) => failed_uploads.push(UploadFailure {
+                filename: payload_filename.to_string(),
+                reason: failure.to_string(),
+            }),
         }
-
-        let database_connection = &data.database_connection;
-        let id = Uuid::new_v4().to_string();
-        let sound_record = Sound {
-            id,
-            file_name,
-            extension: original_file_name
-                .extension()
-                .expect("Failed to get file extension")
-                .to_str()
-                .expect("Failed to get file extension")
-                .to_string(),
-            // TODO: introduce a proper hashing mechanism
-            file_hash: "hash".to_string(),
-            name: original_file_name
-                .file_stem()
-                .expect("Failed to get file stem")
-                .to_str()
-                .expect("Failed to parse file stem")
-                .to_string(),
-        };
-
-        // TODO: run this in separate thread
-        insert_into(sounds_dsl)
-            .values(&sound_record)
-            .execute(database_connection)
-            .expect("Failed to insert sound in database.");
     }
 
-    // TODO: accumulate send successful and failed results to client
     Ok(HttpResponse::Ok().json(UploadResponse {
-        successful: vec![],
-        failed: vec![],
+        successful: successful_uploads,
+        failed: failed_uploads,
         tags: vec![],
     }))
 }
