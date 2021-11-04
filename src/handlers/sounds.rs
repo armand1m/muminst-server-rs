@@ -21,7 +21,7 @@ use songbird::{
 };
 
 use crate::schema::sounds::dsl::sounds as sounds_dsl;
-use crate::{app_state::AppState, models::Sound, schema::sounds, storage::get_audio_path};
+use crate::{app_state::AppState, models::Sound, schema::sounds};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -78,7 +78,16 @@ pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error>
     // TODO: fetch tags as well, add left_join
     let query = sounds::table;
     let sounds = match query.load::<Sound>(database_connection) {
-        Ok(sounds) => sounds,
+        Ok(sounds) => sounds
+            .into_iter()
+            .map(|x| Sound {
+                extension: format!(".{}", x.extension),
+                file_name: x.file_name,
+                file_hash: x.file_hash,
+                id: x.id,
+                name: x.name,
+            })
+            .collect::<Vec<Sound>>(),
         Err(reason) => {
             eprintln!("Failed to fetch sounds from database. Reason: {:?}", reason);
             return Ok(HttpResponse::InternalServerError().json(ErrorPayload {
@@ -112,8 +121,26 @@ pub async fn play_sound_handler(
         let mut handler = handler_lock.lock().await;
 
         // TODO: fetch audio folder path from env var
-        let audio_folder_path = Path::new("data/audio");
-        let audio_path = get_audio_path(audio_folder_path, json.sound_id.clone());
+        let audio_folder_path = Path::new(&data.audio_folder_path);
+
+        let sound = sounds::table
+            .filter(sounds::id.eq(&json.sound_id))
+            .first::<Sound>(&data.database_connection)
+            .optional()
+            .expect("Failed to query by hash");
+
+        let audio_path = match sound {
+            Some(sound) => {
+                let mut path = audio_folder_path.join(sound.file_name);
+                path.set_extension(sound.extension);
+                path
+            }
+            None => {
+                return Ok(HttpResponse::ExpectationFailed().json(ErrorPayload {
+                    message: format!("Failed to find sound with id: {}", json.sound_id),
+                }));
+            }
+        };
 
         if !audio_path.exists() {
             return Ok(HttpResponse::InternalServerError().json(ErrorPayload {
@@ -153,14 +180,24 @@ async fn validate_sound(
 
     while let Some(chunk) = field.try_next().await? {
         // filesystem operations are blocking,
-        // we have to use threadpool
+        // so we have to use a threadpool
         memory_file = web::block(move || memory_file.write_all(&chunk).map(|_| memory_file))
             .await
             .expect("File content to be written")?;
     }
 
     let memory_file_buf = memory_file.get_ref();
-    let file_type = infer::get(&memory_file_buf[0..4]).expect("File type to be identifiable");
+    let file_type = match infer::get(&memory_file_buf[0..4]) {
+        Some(file_type) => file_type,
+        None => {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                "Failed to identify the file type.",
+            )
+            .into());
+        }
+    };
+
     let file_extension = file_type.extension();
     let valid_extensions = ["mp3", "wav", "ogg", "webm"];
 
@@ -171,9 +208,9 @@ async fn validate_sound(
     /*
      * Create a SHA256 hash from the buffer
      */
-    let hash = digest_bytes(memory_file.get_ref());
+    let file_hash = digest_bytes(memory_file_buf);
 
-    Ok((memory_file, file_type, hash))
+    Ok((memory_file, file_type, file_hash))
 }
 
 async fn save_sound_to(
@@ -185,17 +222,13 @@ async fn save_sound_to(
     let mut filepath = audio_folder_path.join(&file_name);
     filepath.set_extension(extension);
 
-    let mut file = web::block(|| File::create(filepath))
-        .await
-        .expect("File to be created")?;
-
     /*
      * Load buffer from memory file into the
      * actual filesystem file
      */
-    file = web::block(move || {
-        let _ = file
-            .write_all(&memory_file.get_ref())
+    let file = web::block(move || {
+        let mut file = File::create(filepath).expect("File to be created");
+        file.write_all(&memory_file.get_ref())
             .expect("File content to be written to filesystem");
         file
     })
@@ -212,22 +245,26 @@ async fn upload_payload_file(
     database_connection: &SqliteConnection,
 ) -> Result<UploadSuccess, Error> {
     let original_filename = Path::new(payload_filename);
-    let extension = original_filename
-        .extension()
-        .expect("File extension to be defined")
-        .to_str()
-        .unwrap()
-        .to_string();
+    let (memory_file, file_type, file_hash) = validate_sound(field).await?;
 
-    let (memory_file, _file_type, file_hash) =
-        validate_sound(field).await.expect("File to be valid");
+    let hash_query = sounds::table
+        .filter(sounds::file_hash.eq(&file_hash))
+        .first::<Sound>(database_connection)
+        .optional()
+        .expect("Failed to query by hash");
 
+    if let Some(_) = hash_query {
+        return Err(std::io::Error::new(ErrorKind::AlreadyExists, "File already exists").into());
+    }
+
+    let extension = file_type.extension();
     let file_name = Uuid::new_v4().to_string();
-    let file = save_sound_to(
+
+    let _ = save_sound_to(
         memory_file,
         audio_folder_path,
         file_name.clone(),
-        extension.clone(),
+        extension.to_string(),
     )
     .await?;
 
@@ -243,7 +280,7 @@ async fn upload_payload_file(
         name: sound_name,
         file_name,
         file_hash,
-        extension: format!(".{}", extension),
+        extension: extension.to_string(),
     };
 
     insert_into(sounds_dsl)
@@ -262,7 +299,7 @@ async fn upload_handler(
     mut payload: Multipart,
     data: Data<AppState>,
 ) -> Result<HttpResponse, Error> {
-    let audio_folder_path = Path::new("data/audio");
+    let audio_folder_path = Path::new(&data.audio_folder_path);
 
     let mut successful_uploads: Vec<UploadSuccess> = vec![];
     let mut failed_uploads: Vec<UploadFailure> = vec![];
@@ -281,6 +318,7 @@ async fn upload_handler(
 
         if field_key == "tags" {
             // TODO: insert tags to database
+            // Assignee: @shayronaguiar
             break;
         }
 

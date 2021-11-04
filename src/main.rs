@@ -9,7 +9,6 @@ mod discord;
 mod handlers;
 pub mod models;
 pub mod schema;
-mod storage;
 
 use diesel_migrations::run_pending_migrations;
 use dotenv;
@@ -55,10 +54,11 @@ fn main() {
 }
 
 async fn async_main() {
-    let token =
-        env::var("DISCORD_TOKEN").expect("Expected a DISCORD_TOKEN to be set in the environment");
-    let database_url =
-        env::var("DATABASE_URL").expect("Expected DATABASE_URL to be set in the environment");
+    let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN to be set in the environment");
+    let database_path =
+        env::var("DATABASE_PATH").expect("DATABASE_PATH to be set in the environment");
+    let audio_folder_path =
+        env::var("AUDIO_PATH").expect("AUDIO_PATH to be set in the environment");
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~"))
@@ -71,7 +71,7 @@ async fn async_main() {
         .framework(framework)
         .register_songbird()
         .await
-        .expect("Error while creating discord client.");
+        .expect("Discord client instance to be created.");
 
     tokio::spawn(async move {
         client
@@ -82,9 +82,8 @@ async fn async_main() {
 
     HttpServer::new(move || {
         let app_name = "muminst-server-rust".to_string();
-
-        let database_connection = SqliteConnection::establish(&database_url)
-            .expect(&format!("Error connecting to {}", database_url));
+        let database_connection = SqliteConnection::establish(&database_path)
+            .expect(&format!("Error connecting to {}", database_path));
 
         run_pending_migrations(&database_connection).expect("Failed to run pending migrations.");
 
@@ -102,6 +101,7 @@ async fn async_main() {
                 app_name,
                 discord_ctx: DISCORD_CTX.to_owned(),
                 database_connection,
+                audio_folder_path: audio_folder_path.clone(),
             }))
             .service(index_handler)
             .service(sounds_handler)
