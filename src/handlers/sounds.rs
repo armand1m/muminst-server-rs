@@ -275,13 +275,6 @@ async fn upload_handler(
             .content_disposition()
             .expect("Content disposition to be present");
 
-        // TODO: Check if content type is among the allowed ones
-        // make sure to check the magic number of the payload buf
-        // and that they intersect with the valid extensions list
-        //
-        // checkout the package `infer`, which is already installed
-        // on this project
-        let _content_type = field.content_type();
         let field_key = content_disposition
             .get_name()
             .expect("Content disposition to have a name");
