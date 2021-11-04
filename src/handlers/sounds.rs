@@ -1,8 +1,9 @@
 use actix_multipart::Multipart;
-use diesel::prelude::*;
+use diesel::{insert_into, prelude::*};
 use std::{fs::File, io::Write, path::Path};
 use uuid::Uuid;
 
+use crate::schema::sounds::dsl::sounds as sounds_dsl;
 use actix_web::{
     get, post,
     web::{self, Data, Json},
@@ -122,7 +123,7 @@ pub async fn play_sound_handler(
         .expect("ffmpeg parameters to be properly defined");
 
         let track = handler.play_source(sound_src.into());
-        let _ = track.set_volume(0.8);
+        let _ = track.set_volume(1.0);
     } else {
         return Ok(HttpResponse::BadRequest().json(ErrorPayload {
             message: "Bot has to join a voice channel first.".to_string(),
@@ -136,32 +137,84 @@ pub async fn play_sound_handler(
 }
 
 #[post("/upload")]
-async fn upload_handler(mut payload: Multipart) -> Result<HttpResponse, Error> {
+async fn upload_handler(
+    mut payload: Multipart,
+    data: Data<AppState>,
+) -> Result<HttpResponse, Error> {
+    let _valid_extensions = vec!["mp3", "wav", "ogg", "webm"];
+    let audio_folder_path = Path::new("data/audio");
+
     // TODO: make sure to only run this loop for files
     // in the multipart request. Currently it is also
     // considering things that are not files (e.g. tags)
     while let Some(mut field) = payload.try_next().await? {
         // A multipart/form-data stream has to contain `content_disposition`
-        field
+        // this is where we'll be able to fetch the file name and
+        // the key name for other parts of the payload
+        let content_disposition = field
             .content_disposition()
             .expect("Content disposition is missing");
 
-        let filename = Uuid::new_v4().to_string();
-        let audio_folder_path = Path::new("data/audio");
-        let filepath = audio_folder_path.join(filename);
+        // TODO: Check if content type is among the allowed ones
+        // make sure to check the magic number of the payload buf
+        // and that they intersect with the valid extensions list
+        //
+        // checkout the package `infer`, which is already installed
+        // on this project
+        let _content_type = field.content_type();
+        let field_key = content_disposition
+            .get_name()
+            .expect("file does not have a name");
 
-        // File::create is blocking operation, use threadpool
-        let mut file = web::block(|| File::create(filepath)).await.unwrap()?;
+        if field_key == "tags" {
+            // TODO: insert tags to database
+            break;
+        }
 
-        // Field in turn is stream of *Bytes* object
+        let original_file_name = Path::new(field_key);
+        let file_name = Uuid::new_v4().to_string();
+        let filepath = audio_folder_path.join(&file_name);
+
+        let mut file = web::block(|| File::create(filepath))
+            .await
+            .expect("Failed to create file")?;
+
         while let Some(chunk) = field.try_next().await? {
             // filesystem operations are blocking, we have to use threadpool
             file = web::block(move || file.write_all(&chunk).map(|_| file))
                 .await
-                .unwrap()?;
+                .expect("Failed to write to file")?;
         }
+
+        let database_connection = &data.database_connection;
+        let id = Uuid::new_v4().to_string();
+        let sound_record = Sound {
+            id,
+            file_name,
+            extension: original_file_name
+                .extension()
+                .expect("Failed to get file extension")
+                .to_str()
+                .expect("Failed to get file extension")
+                .to_string(),
+            // TODO: introduce a proper hashing mechanism
+            file_hash: "hash".to_string(),
+            name: original_file_name
+                .file_stem()
+                .expect("Failed to get file stem")
+                .to_str()
+                .expect("Failed to parse file stem")
+                .to_string(),
+        };
+
+        // TODO: run this in separate thread
+        insert_into(sounds_dsl)
+            .values(&sound_record)
+            .execute(database_connection)
+            .expect("Failed to insert sound in database.");
     }
 
+    // TODO: accumulate send successful and failed results to client
     Ok(HttpResponse::Ok().json(UploadResponse {
         successful: vec![],
         failed: vec![],
