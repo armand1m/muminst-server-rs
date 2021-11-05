@@ -28,7 +28,7 @@ spec:
         ports:
         - containerPort: 8080 
         env:
-        - name: DISCORD_BOT_TOKEN
+        - name: DISCORD_TOKEN
           valueFrom:
             secretKeyRef:
               name: muminst-server-rust-secrets
