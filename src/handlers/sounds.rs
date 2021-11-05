@@ -20,8 +20,8 @@ use songbird::{
     input::{self, cached::Compressed},
 };
 
-use crate::schema::sounds::dsl::sounds as sounds_dsl;
 use crate::{app_state::AppState, models::Sound, schema::sounds};
+use crate::{app_state::DatabasePool, schema::sounds::dsl::sounds as sounds_dsl};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -74,10 +74,18 @@ pub struct UploadResponse {
 
 #[get("/sounds")]
 pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error> {
-    let database_connection = &data.database_connection;
     // TODO: fetch tags as well, add left_join
-    let query = sounds::table;
-    let sounds = match query.load::<Sound>(database_connection) {
+    let query_result = web::block(move || {
+        let query = sounds::table;
+        let database_connection = &data
+            .database_pool
+            .get()
+            .expect("couldn't get db connection from pool");
+        query.load::<Sound>(database_connection)
+    })
+    .await?;
+
+    let sounds = match query_result {
         Ok(sounds) => sounds
             .into_iter()
             .map(|x| Sound {
@@ -112,22 +120,26 @@ pub async fn play_sound_handler(
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
 
-    let guild_id: GuildId = GuildId {
-        // server da maconha guild id
-        0: 194951764045201409,
-    };
+    let guild_id: GuildId = data.discord_guild_id.into();
 
     if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-
-        // TODO: fetch audio folder path from env var
         let audio_folder_path = Path::new(&data.audio_folder_path);
+        let data_clone = data.clone();
+        let sound_id = json.sound_id.clone();
 
-        let sound = sounds::table
-            .filter(sounds::id.eq(&json.sound_id))
-            .first::<Sound>(&data.database_connection)
-            .optional()
-            .expect("Failed to query by hash");
+        let sound = web::block(move || {
+            let database_connection = &data_clone
+                .database_pool
+                .get()
+                .expect("couldn't get db connection from pool");
+
+            sounds::table
+                .filter(sounds::id.eq(sound_id))
+                .first::<Sound>(database_connection)
+                .optional()
+                .expect("Failed to query by sound_id")
+        })
+        .await?;
 
         let audio_path = match sound {
             Some(sound) => {
@@ -148,12 +160,12 @@ pub async fn play_sound_handler(
             }));
         }
 
-        let sound_src = Compressed::new(
-            input::ffmpeg(audio_path).await.expect("Link may be dead."),
-            Bitrate::BitsPerSecond(128_000),
-        )
-        .expect("ffmpeg parameters to be properly defined");
+        let audio_source = input::ffmpeg(audio_path).await.expect("Link may be dead.");
 
+        let sound_src = Compressed::new(audio_source, Bitrate::BitsPerSecond(48_000))
+            .expect("ffmpeg parameters to be properly defined");
+
+        let mut handler = handler_lock.lock().await;
         let track = handler.play_source(sound_src.into());
         let _ = track.set_volume(1.0);
     } else {
@@ -242,16 +254,25 @@ async fn upload_payload_file(
     field: &mut Field,
     payload_filename: &str,
     audio_folder_path: &Path,
-    database_connection: &SqliteConnection,
+    database_pool: DatabasePool,
 ) -> Result<UploadSuccess, Error> {
     let original_filename = Path::new(payload_filename);
     let (memory_file, file_type, file_hash) = validate_sound(field).await?;
 
-    let hash_query = sounds::table
-        .filter(sounds::file_hash.eq(&file_hash))
-        .first::<Sound>(database_connection)
-        .optional()
-        .expect("Failed to query by hash");
+    let file_hash_clone = file_hash.clone();
+    let database_pool_clone = database_pool.clone();
+    let hash_query = web::block(move || {
+        let database_connection = database_pool_clone
+            .get()
+            .expect("failed to acquire db connection from db pool");
+
+        sounds::table
+            .filter(sounds::file_hash.eq(&file_hash_clone))
+            .first::<Sound>(&database_connection)
+            .optional()
+            .expect("Failed to query by hash")
+    })
+    .await?;
 
     if let Some(_) = hash_query {
         return Err(std::io::Error::new(ErrorKind::AlreadyExists, "File already exists").into());
@@ -283,10 +304,18 @@ async fn upload_payload_file(
         extension: extension.to_string(),
     };
 
-    insert_into(sounds_dsl)
-        .values(&sound_record)
-        .execute(database_connection)
-        .expect("Failed to insert sound in database.");
+    let insertable = sound_record.clone();
+    web::block(move || {
+        let database_connection = database_pool
+            .get()
+            .expect("Failed to get db connection from db pool");
+
+        insert_into(sounds_dsl)
+            .values(&insertable)
+            .execute(&database_connection)
+            .expect("Failed to insert sound in database.");
+    })
+    .await?;
 
     Ok(UploadSuccess {
         id: sound_record.id.clone(),
@@ -326,11 +355,12 @@ async fn upload_handler(
             .get_filename()
             .expect("Uploaded file to always contain a filename.");
 
+        let database_pool = data.database_pool.clone();
         let upload_result = upload_payload_file(
             &mut field,
             payload_filename,
             audio_folder_path,
-            &data.database_connection,
+            database_pool,
         )
         .await;
 

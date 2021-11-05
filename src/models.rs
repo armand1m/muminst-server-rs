@@ -1,7 +1,7 @@
 use crate::schema::{sounds, tags};
 
 use serde::{Deserialize, Serialize};
-#[derive(Queryable, Associations, Identifiable, Deserialize, Serialize, Insertable)]
+#[derive(Queryable, Associations, Identifiable, Deserialize, Serialize, Insertable, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Sound {
     pub id: String,

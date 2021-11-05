@@ -46,6 +46,8 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
     let _handler = manager.join(guild_id, connect_to).await;
 
+    check_msg(msg.channel_id.say(&ctx.http, "Joined voice channel").await);
+
     Ok(())
 }
 
