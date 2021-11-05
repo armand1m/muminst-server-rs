@@ -14,7 +14,7 @@ use actix_web::{
 };
 use serde::{Deserialize, Serialize};
 use serenity::{futures::TryStreamExt, model::id::GuildId};
-use sha256::digest_bytes;
+use sha2::{Digest, Sha512};
 use songbird::{
     driver::Bitrate,
     input::{self, cached::Compressed},
@@ -218,9 +218,12 @@ async fn validate_sound(
     }
 
     /*
-     * Create a SHA256 hash from the buffer
+     * Create a SHA512 hash from the buffer
      */
-    let file_hash = digest_bytes(memory_file_buf);
+    let mut hasher = Sha512::new();
+    hasher.update(memory_file_buf);
+    let hash_result = hasher.finalize();
+    let file_hash = format!("{:x}", hash_result);
 
     Ok((memory_file, file_type, file_hash))
 }
