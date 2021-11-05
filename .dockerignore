@@ -1,0 +1,11 @@
+.vscode
+target
+data
+.git
+.env
+Dockerfile
+.dockerignore
+.editorconfig
+.gitignore
+README.md
+CONTRIBUTING.md
