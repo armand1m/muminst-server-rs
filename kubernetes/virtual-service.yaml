@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: muminst-server-rust
+  namespace: default
+spec:
+  hosts:
+  - muminst-server-rust.d1m.dev
+  - muminst-server-rust.armand1m.dev
+  gateways:
+  - ingressgateway-workload
+  http:
+  - match:
+    - port: 443
+    route:
+    - destination:
+        host: muminst-server-rust
+        port:
+          number: 8080 

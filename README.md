@@ -17,18 +17,18 @@ This is currently a work in progress, and many features are still unstable. Foll
 - [x] Docker Image
     - [x] debian version
     - [ ] alpine version
-- [ ] Kubernetes manifests
-    - [ ] PersistentVolumeClaim
+- [x] Kubernetes manifests
+    - [x] PersistentVolumeClaim
     - [ ] VolumeSnapshot
-    - [ ] Deployment
-    - [ ] Service
-    - [ ] VirtualService
-    - [ ] DestinationRule 
-    - [ ] Kustomize
-- [ ] CI
-    - [ ] Setup github actions
-    - [ ] Build docker image
-    - [ ] Deploy application to kubernetes
+    - [x] Deployment
+    - [x] Service
+    - [x] VirtualService
+    - [x] DestinationRule 
+    - [x] Kustomize
+- [x] CI
+    - [x] Setup github actions
+    - [x] Build docker image
+    - [x] Deploy application to kubernetes
 - [ ] Observability
     - [ ] [Setup sentry](https://docs.sentry.io/platforms/rust/guides/actix-web/)
 - [ ] HTTP Server
