@@ -161,13 +161,15 @@ pub async fn play_sound_handler(
         }
 
         let audio_source = input::ffmpeg(audio_path).await.expect("Link may be dead.");
-
         let sound_src = Compressed::new(audio_source, Bitrate::BitsPerSecond(48_000))
             .expect("ffmpeg parameters to be properly defined");
 
-        let mut handler = handler_lock.lock().await;
-        let track = handler.play_source(sound_src.into());
-        let _ = track.set_volume(1.0);
+        let mut handler = handler_lock.lock().await.clone();
+        web::block(move || {
+            let track = handler.play_source(sound_src.into());
+            let _ = track.set_volume(1.0);
+        })
+        .await?;
     } else {
         return Ok(HttpResponse::BadRequest().json(ErrorPayload {
             message: "Bot has to join a voice channel first.".to_string(),
@@ -175,8 +177,8 @@ pub async fn play_sound_handler(
     }
 
     Ok(HttpResponse::Ok().json(PlaySoundResponse {
-        sound_id: json.sound_id.to_owned(),
-        client: json.client.to_owned(),
+        sound_id: json.sound_id.clone(),
+        client: json.client.clone(),
     }))
 }
 

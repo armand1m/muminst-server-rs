@@ -26,8 +26,8 @@ use serenity::{
 use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
+use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::sqlite::SqliteConnection;
-use diesel::r2d2::{Pool, ConnectionManager};
 
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
