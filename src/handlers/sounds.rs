@@ -164,12 +164,10 @@ pub async fn play_sound_handler(
         let sound_src = Compressed::new(audio_source, Bitrate::BitsPerSecond(48_000))
             .expect("ffmpeg parameters to be properly defined");
 
-        let mut handler = handler_lock.lock().await.clone();
-        web::block(move || {
-            let track = handler.play_source(sound_src.into());
-            let _ = track.set_volume(1.0);
-        })
-        .await?;
+        let mut handler = handler_lock.lock().await;
+        handler.play_source(sound_src.into());
+
+        println!("Playing audio: {}", json.sound_id);
     } else {
         return Ok(HttpResponse::BadRequest().json(ErrorPayload {
             message: "Bot has to join a voice channel first.".to_string(),
@@ -339,9 +337,7 @@ async fn upload_handler(
         // A multipart/form-data stream has to contain `content_disposition`
         // this is where we'll be able to fetch the file name and
         // the key name for other parts of the payload
-        let content_disposition = field
-            .content_disposition()
-            .expect("Content disposition to be present");
+        let content_disposition = field.content_disposition().clone();
 
         let field_key = content_disposition
             .get_name()
