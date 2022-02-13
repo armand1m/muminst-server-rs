@@ -1,27 +1,44 @@
 use actix_multipart::{Field, Multipart};
-use diesel::{insert_into, prelude::*};
+use diesel::{
+    insert_into,
+    prelude::*,
+    r2d2::{ConnectionManager, PooledConnection},
+};
 use std::{
     fs::File,
+    future::Future,
     io::{Cursor, ErrorKind, Write},
     path::Path,
+    pin::Pin,
 };
 use uuid::Uuid;
 
 use actix_web::{
+    dev::Payload,
     get, post,
-    web::{self, Data, Json},
-    Error, HttpResponse,
+    web::{self, Bytes, Data, Json},
+    Error, FromRequest, HttpRequest, HttpResponse,
 };
 use serde::{Deserialize, Serialize};
-use serenity::{futures::TryStreamExt, model::id::GuildId};
+use serenity::{
+    futures::{StreamExt, TryStreamExt},
+    model::id::GuildId,
+};
 use sha256::digest_bytes;
 use songbird::{
     driver::Bitrate,
     input::{self, cached::Compressed},
 };
 
-use crate::{app_state::AppState, models::Sound, schema::sounds};
-use crate::{app_state::DatabasePool, schema::sounds::dsl::sounds as sounds_dsl};
+use crate::{
+    app_state::AppState,
+    models::{Sound, SoundWithTags, Tag},
+    schema::sounds,
+};
+use crate::{
+    app_state::DatabasePool, schema::sounds::dsl::sounds as sounds_dsl,
+    schema::tags::dsl::tags as tags_dsl,
+};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -72,30 +89,42 @@ pub struct UploadResponse {
     tags: Vec<String>,
 }
 
+pub fn fetch_sounds(
+    database_connection: &PooledConnection<ConnectionManager<SqliteConnection>>,
+) -> Result<Vec<(Sound, Vec<Tag>)>, diesel::result::Error> {
+    let sounds = sounds::table.load::<Sound>(database_connection)?;
+    let tags = Tag::belonging_to(&sounds)
+        .load::<Tag>(database_connection)?
+        .grouped_by(&sounds);
+
+    let data = sounds.into_iter().zip(tags).collect::<Vec<_>>();
+    Ok(data)
+}
+
 #[get("/sounds")]
 pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error> {
-    // TODO: fetch tags as well, add left_join
-    let query_result = web::block(move || {
-        let query = sounds::table;
+    let result = web::block(move || {
         let database_connection = &data
             .database_pool
             .get()
             .expect("couldn't get db connection from pool");
-        query.load::<Sound>(database_connection)
+
+        fetch_sounds(database_connection)
     })
     .await?;
 
-    let sounds = match query_result {
+    let response = match result {
         Ok(sounds) => sounds
             .into_iter()
-            .map(|x| Sound {
+            .map(|(x, tags)| SoundWithTags {
                 extension: format!(".{}", x.extension),
                 file_name: x.file_name,
                 file_hash: x.file_hash,
                 id: x.id,
                 name: x.name,
+                tags: tags.into_iter().map(|tag| tag.slug).collect(),
             })
-            .collect::<Vec<Sound>>(),
+            .collect::<Vec<SoundWithTags>>(),
         Err(reason) => {
             eprintln!("Failed to fetch sounds from database. Reason: {:?}", reason);
             return Ok(HttpResponse::InternalServerError().json(ErrorPayload {
@@ -104,7 +133,7 @@ pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error>
         }
     };
 
-    Ok(HttpResponse::Ok().json(sounds))
+    Ok(HttpResponse::Ok().json(response))
 }
 
 #[post("/play-sound")]
@@ -181,7 +210,7 @@ pub async fn play_sound_handler(
 }
 
 async fn validate_sound(
-    field: &mut Field,
+    file_content: Vec<Bytes>,
 ) -> Result<(Cursor<Vec<u8>>, infer::Type, String), Error> {
     /*
      * Creates a Cursor to load the buffer
@@ -189,11 +218,11 @@ async fn validate_sound(
      * to the disk
      */
     let mut memory_file = Cursor::new(Vec::<u8>::new());
+    let mut content_iter = file_content.to_owned().into_iter();
 
-    while let Some(chunk) = field.try_next().await? {
-        // filesystem operations are blocking,
-        // so we have to use a threadpool
-        memory_file = web::block(move || memory_file.write_all(&chunk).map(|_| memory_file))
+    while let Some(chunk) = content_iter.next() {
+        let as_slice = chunk.as_ref().to_owned();
+        memory_file = web::block(move || memory_file.write_all(&as_slice).map(|_| memory_file))
             .await
             .expect("File content to be written")?;
     }
@@ -251,13 +280,14 @@ async fn save_sound_to(
 }
 
 async fn upload_payload_file(
-    field: &mut Field,
-    payload_filename: &str,
+    file_content: Vec<Bytes>,
+    filename: &str,
     audio_folder_path: &Path,
     database_pool: DatabasePool,
+    slugs: Vec<String>,
 ) -> Result<UploadSuccess, Error> {
-    let original_filename = Path::new(payload_filename);
-    let (memory_file, file_type, file_hash) = validate_sound(field).await?;
+    let original_filename = Path::new(filename);
+    let (memory_file, file_type, file_hash) = validate_sound(file_content).await?;
 
     let file_hash_clone = file_hash.clone();
     let database_pool_clone = database_pool.clone();
@@ -304,6 +334,15 @@ async fn upload_payload_file(
         extension: extension.to_string(),
     };
 
+    let tag_records = slugs
+        .into_iter()
+        .map(|slug| Tag {
+            sound_id: sound_record.id.clone(),
+            id: Uuid::new_v4().to_string(),
+            slug,
+        })
+        .collect::<Vec<_>>();
+
     let insertable = sound_record.clone();
     web::block(move || {
         let database_connection = database_pool
@@ -314,58 +353,134 @@ async fn upload_payload_file(
             .values(&insertable)
             .execute(&database_connection)
             .expect("Failed to insert sound in database.");
+
+        insert_into(tags_dsl)
+            .values(tag_records)
+            // https://github.com/diesel-rs/diesel/issues/1822
+            .execute(&*database_connection)
+            .expect("Failed to insert tags in database.");
     })
     .await?;
 
     Ok(UploadSuccess {
         id: sound_record.id.clone(),
-        filename: payload_filename.to_string(),
+        filename: filename.to_string(),
     })
+}
+
+// https://gist.github.com/Tarkin25/b6274a8a33baa6a72d7763e298f1fb8f
+struct SoundUpload {
+    filename: String,
+    content: Vec<Bytes>,
+}
+struct BatchSoundUpload {
+    sounds: Vec<SoundUpload>,
+    tags: Vec<String>,
+}
+
+impl BatchSoundUpload {
+    async fn read_string(field: &mut Field) -> Option<String> {
+        let bytes = field.try_next().await;
+
+        if let Ok(Some(bytes)) = bytes {
+            String::from_utf8(bytes.to_vec()).ok()
+        } else {
+            None
+        }
+    }
+
+    async fn from_multipart(
+        mut multipart: Multipart,
+    ) -> Result<Self, <Self as FromRequest>::Error> {
+        let mut tags: Vec<String> = Vec::new();
+        let mut sounds: Vec<SoundUpload> = Vec::new();
+
+        while let Some(mut field) = multipart.try_next().await? {
+            // A multipart/form-data stream has to contain `content_disposition`
+            // this is where we'll be able to fetch the file name and
+            // the key name for other parts of the payload
+            let content_disposition = field.content_disposition().clone();
+
+            let field_key = content_disposition
+                .get_name()
+                .expect("Content disposition to have a name");
+
+            if field_key == "tags" {
+                let field_content = Self::read_string(&mut field).await;
+
+                if let Some(json_content) = field_content {
+                    tags = serde_json::from_str(&json_content)?;
+                }
+
+                break;
+            }
+
+            let payload_filename = content_disposition
+                .get_filename()
+                .expect("Uploaded file to always contain a filename.");
+
+            let sound_upload = SoundUpload {
+                filename: payload_filename.to_string(),
+                content: field
+                    .map(|chunk| chunk.unwrap())
+                    .collect::<Vec<Bytes>>()
+                    .await,
+            };
+
+            sounds.push(sound_upload);
+        }
+
+        Ok(BatchSoundUpload { tags, sounds })
+    }
+}
+
+impl FromRequest for BatchSoundUpload {
+    type Error = actix_web::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
+
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        // get a future for a Multipart struct from the request
+        let multipart_future = Multipart::from_request(req, payload);
+
+        // As this is not an async function, we cannot use 'await'.
+        // Instead, we create future from this async block and return a pinned Box containing our future.
+        // This is because currently, traits cannot declare async functions, so instead the FromRequest trait declares a non-async function which returns a Future instead.
+        let future = async {
+            // Inside of this async block we are able to use 'await'
+            let multipart = multipart_future.await?;
+
+            // Await our async function containing the actual logic
+            Self::from_multipart(multipart).await
+        };
+
+        Box::pin(future)
+    }
 }
 
 #[post("/upload")]
 async fn upload_handler(
-    mut payload: Multipart,
+    payload: BatchSoundUpload,
     data: Data<AppState>,
 ) -> Result<HttpResponse, Error> {
     let audio_folder_path = Path::new(&data.audio_folder_path);
-
     let mut successful_uploads: Vec<UploadSuccess> = vec![];
     let mut failed_uploads: Vec<UploadFailure> = vec![];
 
-    while let Some(mut field) = payload.try_next().await? {
-        // A multipart/form-data stream has to contain `content_disposition`
-        // this is where we'll be able to fetch the file name and
-        // the key name for other parts of the payload
-        let content_disposition = field.content_disposition().clone();
-
-        let field_key = content_disposition
-            .get_name()
-            .expect("Content disposition to have a name");
-
-        if field_key == "tags" {
-            // TODO: insert tags to database
-            // Assignee: @shayronaguiar
-            break;
-        }
-
-        let payload_filename = content_disposition
-            .get_filename()
-            .expect("Uploaded file to always contain a filename.");
-
+    for sound_upload in payload.sounds.into_iter() {
         let database_pool = data.database_pool.clone();
         let upload_result = upload_payload_file(
-            &mut field,
-            payload_filename,
+            sound_upload.content,
+            &sound_upload.filename,
             audio_folder_path,
             database_pool,
+            payload.tags.clone(),
         )
         .await;
 
         match upload_result {
             Ok(successful) => successful_uploads.push(successful),
             Err(failure) => failed_uploads.push(UploadFailure {
-                filename: payload_filename.to_string(),
+                filename: sound_upload.filename.to_string(),
                 reason: failure.to_string(),
             }),
         }
@@ -374,6 +489,6 @@ async fn upload_handler(
     Ok(HttpResponse::Ok().json(UploadResponse {
         successful: successful_uploads,
         failed: failed_uploads,
-        tags: vec![],
+        tags: payload.tags,
     }))
 }
