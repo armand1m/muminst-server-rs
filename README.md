@@ -46,7 +46,7 @@ This is currently a work in progress, and many features are still unstable. Foll
         - [x] Uploads sound to disk
         - [x] Inserts sound record in the database
         - [x] Inserts given tags
-    - [ ] POST /add-tags/:sound_id
+    - [x] PUT /add-tags/:sound_id
 - [ ] Websocket Server
     - [ ] actix websocket setup 
     - [ ] /ws route
