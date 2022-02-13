@@ -7,6 +7,7 @@ This is currently a work in progress, and many features are still unstable. Foll
 - [x] dotenv 
 - [ ] Logger
     - [x] discord client connection event 
+    - [x] discord client reconnection event
     - [ ] http server startup
     - [ ] http server requests
 - [x] Storage
@@ -44,8 +45,8 @@ This is currently a work in progress, and many features are still unstable. Foll
         - [x] Checks if sound already exists in the database
         - [x] Uploads sound to disk
         - [x] Inserts sound record in the database
-        - [ ] Inserts given tags
-    - [ ] POST /add-tags/:sound_id
+        - [x] Inserts given tags
+    - [x] PUT /add-tags/:sound_id
 - [ ] Websocket Server
     - [ ] actix websocket setup 
     - [ ] /ws route

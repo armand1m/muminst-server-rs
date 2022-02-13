@@ -34,7 +34,6 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         Some(channel) => channel,
         None => {
             check_msg(msg.reply(ctx, "Not in a voice channel").await);
-
             return Ok(());
         }
     };
