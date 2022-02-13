@@ -1,13 +1,9 @@
 use actix_multipart::{Field, Multipart};
-use diesel::{insert_into, prelude::*};
-use std::{
-    fs::File,
-    future::Future,
-    io::{Cursor, ErrorKind, Write},
-    path::Path,
-    pin::Pin,
-};
+use serde::Serialize;
+use serenity::futures::{StreamExt, TryStreamExt};
 use uuid::Uuid;
+
+use std::{future::Future, io::ErrorKind, path::Path, pin::Pin};
 
 use actix_web::{
     dev::Payload,
@@ -15,19 +11,14 @@ use actix_web::{
     web::{self, Bytes, Data},
     Error, FromRequest, HttpRequest, HttpResponse,
 };
-use serde::Serialize;
-use serenity::futures::{StreamExt, TryStreamExt};
-use sha256::digest_bytes;
 
 use crate::{
-    app_state::AppState,
-    models::{Sound, Tag},
-    schema::sounds,
-};
-
-use crate::{
-    app_state::DatabasePool, schema::sounds::dsl::sounds as sounds_dsl,
-    schema::tags::dsl::tags as tags_dsl,
+    actions::{
+        fs::{save_sound_as_file, validate_sound},
+        sounds::{fetch_sound_by_hash, insert_sound},
+    },
+    app_state::{AppState, DatabasePool},
+    models::Sound,
 };
 
 #[derive(Serialize, Clone)]
@@ -190,31 +181,27 @@ async fn upload_payload_file(
 
     let file_hash_clone = file_hash.clone();
     let database_pool_clone = database_pool.clone();
-    let hash_query = web::block(move || {
+    let sound_hash_match = web::block(move || {
         let database_connection = database_pool_clone
             .get()
             .expect("failed to acquire db connection from db pool");
 
-        sounds::table
-            .filter(sounds::file_hash.eq(&file_hash_clone))
-            .first::<Sound>(&database_connection)
-            .optional()
-            .expect("Failed to query by hash")
+        fetch_sound_by_hash(file_hash_clone, &database_connection)
     })
     .await?;
 
-    if let Some(_) = hash_query {
+    if let Some(_) = sound_hash_match {
         return Err(std::io::Error::new(ErrorKind::AlreadyExists, "File already exists").into());
     }
 
     let extension = file_type.extension();
     let file_name = Uuid::new_v4().to_string();
 
-    let _ = save_sound_to(
+    let _ = save_sound_as_file(
         memory_file,
-        audio_folder_path,
         file_name.clone(),
         extension.to_string(),
+        audio_folder_path,
     )
     .await?;
 
@@ -233,31 +220,13 @@ async fn upload_payload_file(
         extension: extension.to_string(),
     };
 
-    let tag_records = slugs
-        .into_iter()
-        .map(|slug| Tag {
-            sound_id: sound_record.id.clone(),
-            id: Uuid::new_v4().to_string(),
-            slug,
-        })
-        .collect::<Vec<_>>();
-
     let insertable = sound_record.clone();
     web::block(move || {
         let database_connection = database_pool
             .get()
             .expect("Failed to get db connection from db pool");
 
-        insert_into(sounds_dsl)
-            .values(&insertable)
-            .execute(&database_connection)
-            .expect("Failed to insert sound in database.");
-
-        insert_into(tags_dsl)
-            .values(tag_records)
-            // https://github.com/diesel-rs/diesel/issues/1822
-            .execute(&*database_connection)
-            .expect("Failed to insert tags in database.");
+        insert_sound(insertable, slugs, &database_connection);
     })
     .await?;
 
@@ -265,74 +234,4 @@ async fn upload_payload_file(
         id: sound_record.id.clone(),
         filename: filename.to_string(),
     })
-}
-
-async fn validate_sound(
-    file_content: Vec<Bytes>,
-) -> Result<(Cursor<Vec<u8>>, infer::Type, String), Error> {
-    /*
-     * Creates a Cursor to load the buffer
-     * in memory before actually writing it
-     * to the disk
-     */
-    let mut memory_file = Cursor::new(Vec::<u8>::new());
-    let mut content_iter = file_content.to_owned().into_iter();
-
-    while let Some(chunk) = content_iter.next() {
-        memory_file = web::block(move || memory_file.write_all(&chunk).map(|_| memory_file))
-            .await
-            .expect("File content to be written")?;
-    }
-
-    let memory_file_buf = memory_file.get_ref();
-    let file_type_slice = &memory_file_buf[0..4];
-    let file_type = match infer::get(file_type_slice) {
-        Some(file_type) => file_type,
-        None => {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidData,
-                "Failed to identify the file type.",
-            )
-            .into());
-        }
-    };
-
-    let file_extension = file_type.extension();
-    let valid_extensions = ["mp3", "wav", "ogg", "webm"];
-
-    if !valid_extensions.contains(&file_extension) {
-        return Err(std::io::Error::new(ErrorKind::InvalidData, "File type is not valid").into());
-    }
-
-    /*
-     * Create a SHA256 hash from the buffer
-     */
-    let file_hash = digest_bytes(memory_file_buf);
-
-    Ok((memory_file, file_type, file_hash))
-}
-
-async fn save_sound_to(
-    memory_file: Cursor<Vec<u8>>,
-    audio_folder_path: &Path,
-    file_name: String,
-    extension: String,
-) -> Result<File, Error> {
-    let mut filepath = audio_folder_path.join(&file_name);
-    filepath.set_extension(extension);
-
-    /*
-     * Load buffer from memory file into the
-     * actual filesystem file
-     */
-    let file = web::block(move || {
-        let mut file = File::create(filepath).expect("File to be created");
-        file.write_all(&memory_file.get_ref())
-            .expect("File content to be written to filesystem");
-        file
-    })
-    .await
-    .expect("File content to be written to filesystem");
-
-    Ok(file)
 }

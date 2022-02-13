@@ -1,4 +1,3 @@
-use diesel::prelude::*;
 use std::path::Path;
 
 use actix_web::{
@@ -13,7 +12,7 @@ use songbird::{
     input::{self, cached::Compressed},
 };
 
-use crate::{app_state::AppState, models::Sound, schema::sounds};
+use crate::{actions::sounds::fetch_sound_by_id, app_state::AppState};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
@@ -68,11 +67,7 @@ pub async fn play_sound_handler(
                 .get()
                 .expect("couldn't get db connection from pool");
 
-            sounds::table
-                .filter(sounds::id.eq(sound_id))
-                .first::<Sound>(database_connection)
-                .optional()
-                .expect("Failed to query by sound_id")
+            fetch_sound_by_id(sound_id, database_connection)
         })
         .await?;
 

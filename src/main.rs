@@ -4,6 +4,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate diesel;
 
+mod actions;
 mod app_state;
 mod discord;
 mod handlers;
@@ -31,7 +32,10 @@ use diesel::sqlite::SqliteConnection;
 
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
-use handlers::{play_sound::play_sound_handler, sounds::sounds_handler, upload::upload_handler};
+use handlers::{
+    add_tags::add_tags_handler, play_sound::play_sound_handler, sounds::sounds_handler,
+    upload::upload_handler,
+};
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -121,6 +125,7 @@ async fn async_main() {
             .service(sounds_handler)
             .service(upload_handler)
             .service(play_sound_handler)
+            .service(add_tags_handler)
             .service(Files::new("/assets", "./data/audio"))
     })
     .bind("0.0.0.0:8080")
