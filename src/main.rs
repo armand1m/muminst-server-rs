@@ -31,7 +31,7 @@ use diesel::sqlite::SqliteConnection;
 
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
-use handlers::sounds::{play_sound_handler, sounds_handler, upload_handler};
+use handlers::{play_sound::play_sound_handler, sounds::sounds_handler, upload::upload_handler};
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
