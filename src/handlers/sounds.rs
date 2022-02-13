@@ -5,7 +5,7 @@ use actix_web::{
 };
 use serde::Serialize;
 
-use crate::{actions::sounds::fetch_sounds, app_state::AppState};
+use crate::{actions::sounds::fetch_sounds_with_tags, app_state::AppState};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,7 +21,7 @@ pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error>
             .get()
             .expect("couldn't get db connection from pool");
 
-        fetch_sounds(database_connection)
+        fetch_sounds_with_tags(database_connection)
     })
     .await?;
 

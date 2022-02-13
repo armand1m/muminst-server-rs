@@ -7,7 +7,7 @@ use crate::{
     models::{SoundWithTags, Tag},
 };
 
-use crate::{actions::sounds::fetch_sound_by_id, schema::tags::dsl::tags as tags_dsl};
+use crate::{actions::sounds::fetch_sound_with_tags_by_id, schema::tags::dsl::tags as tags_dsl};
 
 pub async fn insert_tags(
     sound_id: String,
@@ -34,7 +34,7 @@ pub async fn insert_tags(
             .execute(&*database_connection)
             .expect("Failed to insert tags in database.");
 
-        fetch_sound_by_id(sound_id, &database_connection)
+        fetch_sound_with_tags_by_id(sound_id, &database_connection)
     })
     .await?;
 

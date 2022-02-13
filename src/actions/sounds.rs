@@ -8,7 +8,7 @@ use crate::{
     schema::tags::dsl::tags as tags_dsl,
 };
 
-pub fn fetch_sounds(
+pub fn fetch_sounds_with_tags(
     database_connection: &SqliteConnection,
 ) -> Result<Vec<SoundWithTags>, diesel::result::Error> {
     let sounds = sounds::table.load::<Sound>(database_connection)?;
@@ -33,6 +33,17 @@ pub fn fetch_sounds(
 }
 
 pub fn fetch_sound_by_id(
+    sound_id: String,
+    database_connection: &SqliteConnection,
+) -> Option<Sound> {
+    sounds::table
+        .filter(sounds::id.eq(sound_id))
+        .first::<Sound>(database_connection)
+        .optional()
+        .expect("Failed to query by sound_id")
+}
+
+pub fn fetch_sound_with_tags_by_id(
     sound_id: String,
     database_connection: &SqliteConnection,
 ) -> Option<SoundWithTags> {
