@@ -1,1 +1,1 @@
-pub mod sound_lock_handler;
+pub mod sound_lock;

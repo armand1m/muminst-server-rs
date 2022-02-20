@@ -1,5 +1,5 @@
 use actix::{Actor, StreamHandler};
-use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
 struct SoundLockWSHandler;
@@ -19,7 +19,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SoundLockWSHandle
     }
 }
 
-async fn index(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
+pub async fn sound_lock_handler(
+    req: HttpRequest,
+    stream: web::Payload,
+) -> Result<HttpResponse, Error> {
     let resp = ws::start(SoundLockWSHandler {}, &req, stream);
     println!("{:?}", resp);
     resp

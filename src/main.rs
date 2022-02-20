@@ -27,7 +27,7 @@ use serenity::{
 
 use actix_cors::Cors;
 use actix_files::Files;
-use actix_web::{middleware::Logger, web::Data, App, HttpServer};
+use actix_web::{middleware::Logger, web, web::Data, App, HttpServer};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::sqlite::SqliteConnection;
 
@@ -37,7 +37,7 @@ use handlers::{
     add_tags::add_tags_handler, play_sound::play_sound_handler, sounds::sounds_handler,
     upload::upload_handler,
 };
-use websocket::sound_lock_handler;
+use websocket::sound_lock::sound_lock_handler;
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -124,11 +124,11 @@ async fn async_main() {
                 database_pool: database_pool.clone(),
                 audio_folder_path: audio_folder_path.clone(),
             }))
+            .route("/ws/", web::get().to(sound_lock_handler))
             .service(sounds_handler)
             .service(upload_handler)
             .service(play_sound_handler)
             .service(add_tags_handler)
-            .service(sound_lock_handler)
             .service(Files::new("/assets", "./data/audio"))
     })
     .bind("0.0.0.0:8080")
