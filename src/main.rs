@@ -10,6 +10,7 @@ mod discord;
 mod handlers;
 pub mod models;
 pub mod schema;
+mod websocket;
 
 use diesel_migrations::run_pending_migrations;
 use dotenv;
@@ -36,6 +37,7 @@ use handlers::{
     add_tags::add_tags_handler, play_sound::play_sound_handler, sounds::sounds_handler,
     upload::upload_handler,
 };
+use websocket::sound_lock_handler;
 
 lazy_static! {
     pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
@@ -126,6 +128,7 @@ async fn async_main() {
             .service(upload_handler)
             .service(play_sound_handler)
             .service(add_tags_handler)
+            .service(sound_lock_handler)
             .service(Files::new("/assets", "./data/audio"))
     })
     .bind("0.0.0.0:8080")

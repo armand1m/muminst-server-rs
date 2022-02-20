@@ -54,11 +54,9 @@ pub async fn validate_sound(
     let file_type = match infer::get(file_type_slice) {
         Some(file_type) => file_type,
         None => {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidData,
-                "Failed to identify the file type.",
-            )
-            .into());
+            return Err(
+                Error::new(ErrorKind::InvalidData, "Failed to identify the file type.").into(),
+            );
         }
     };
 
@@ -66,7 +64,7 @@ pub async fn validate_sound(
     let valid_extensions = ["mp3", "wav", "ogg", "webm"];
 
     if !valid_extensions.contains(&file_extension) {
-        return Err(std::io::Error::new(ErrorKind::InvalidData, "File type is not valid").into());
+        return Err(Error::new(ErrorKind::InvalidData, "File type is not valid").into());
     }
 
     /*
