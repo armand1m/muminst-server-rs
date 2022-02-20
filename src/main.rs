@@ -124,7 +124,7 @@ async fn async_main() {
                 database_pool: database_pool.clone(),
                 audio_folder_path: audio_folder_path.clone(),
             }))
-            .route("/ws/", web::get().to(sound_lock_handler))
+            .service(web::resource("/ws").route(web::get().to(sound_lock_handler)))
             .service(sounds_handler)
             .service(upload_handler)
             .service(play_sound_handler)
