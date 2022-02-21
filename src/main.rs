@@ -14,6 +14,7 @@ mod websocket;
 
 use diesel_migrations::run_pending_migrations;
 use dotenv;
+use log::info;
 use songbird::SerenityInit;
 use std::{
     env,
@@ -27,9 +28,11 @@ use serenity::{
 
 use actix_cors::Cors;
 use actix_files::Files;
+use actix_web::rt::System;
 use actix_web::{middleware::Logger, web, web::Data, App, HttpServer};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::sqlite::SqliteConnection;
+use tokio::runtime::Builder;
 
 use app_state::AppState;
 use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
@@ -45,13 +48,17 @@ lazy_static! {
 
 fn main() {
     dotenv::dotenv().ok();
+
+    let logger_env = env_logger::Env::new().default_filter_or("info,tracing::span=off");
+    env_logger::init_from_env(logger_env);
+
     let thread_count = env::var("THREAD_COUNT")
         .unwrap_or(1.to_string())
         .parse::<usize>()
         .expect("THREAD_COUNT env var should be a valid number");
 
-    actix_web::rt::System::with_tokio_rt(|| {
-        tokio::runtime::Builder::new_multi_thread()
+    System::with_tokio_rt(|| {
+        Builder::new_multi_thread()
             .enable_all()
             .worker_threads(thread_count)
             .build()
@@ -124,7 +131,7 @@ async fn async_main() {
                 database_pool: database_pool.clone(),
                 audio_folder_path: audio_folder_path.clone(),
             }))
-            .service(web::resource("/ws").route(web::get().to(sound_lock_handler)))
+            .service(web::resource("/ws").to(sound_lock_handler))
             .service(sounds_handler)
             .service(upload_handler)
             .service(play_sound_handler)
@@ -146,5 +153,5 @@ async fn async_main() {
 
     tokio::signal::ctrl_c().await.unwrap();
 
-    println!("Received Ctrl-C, shutting down.");
+    info!("Received Ctrl-C, shutting down.");
 }

@@ -2,14 +2,19 @@
 
 This is the muminst server implementation in rust.
 
-This is currently a work in progress, and many features are still unstable. Follow up on the feature compatibility list to get familiar with ongoing progress:
+This is currently a work in progress, and many features are still unstable.
+
+Follow up on the feature compatibility list to get familiar with ongoing progress:
 
 - [x] dotenv 
-- [ ] Logger
+- [x] Logger
+    - [x] uses env_logger
+    - [x] uses [actix logger middleware](https://actix.rs/actix-web/actix_web/middleware/struct.Logger.html)
     - [x] discord client connection event 
     - [x] discord client reconnection event
-    - [ ] http server startup
-    - [ ] http server requests
+    - [x] discord client startup
+    - [x] http server startup
+    - [x] http server requests
 - [x] Storage
     - [x] sqlite3 database
     - [x] diesel orm setup
@@ -36,7 +41,7 @@ This is currently a work in progress, and many features are still unstable. Foll
     - [x] GET /assets
     - [ ] GET /download-sounds
     - [x] POST /play-sound
-    - [ ] POST /upload
+    - [x] POST /upload
         - [x] Checks for supported file types
             - [x] mp3
             - [x] webm
@@ -48,8 +53,8 @@ This is currently a work in progress, and many features are still unstable. Foll
         - [x] Inserts given tags
     - [x] PUT /add-tags/:sound_id
 - [ ] Websocket Server
-    - [ ] actix websocket setup 
-    - [ ] /ws route
+    - [x] actix websocket setup 
+    - [x] /ws route
         - [ ] Notifies locked state to clients
         - [ ] Manages connections correctly
 - [x] Discord Client
