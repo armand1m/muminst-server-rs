@@ -114,7 +114,7 @@ async fn async_main() {
             .allow_any_method();
 
         let logger = Logger::default();
-        let data = Data::new(AppState {
+        let app_data = Data::new(AppState {
             app_name,
             discord_guild_id,
             discord_actor_addr: discord_actor_addr.clone(),
@@ -126,7 +126,7 @@ async fn async_main() {
         App::new()
             .wrap(cors)
             .wrap(logger)
-            .app_data(data)
+            .app_data(app_data)
             .service(websocket_handler)
             .service(sounds_handler)
             .service(upload_handler)

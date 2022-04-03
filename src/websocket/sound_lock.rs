@@ -61,14 +61,38 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SoundLockWSHandle
             Ok(ws::Message::Pong(_)) => {
                 self.heartbeat = Instant::now();
             }
-            Ok(ws::Message::Text(text)) => ctx.text(text),
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
                 ctx.stop();
             }
             _ => ctx.stop(),
         }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct LockSound {}
+
+impl Handler<LockSound> for SoundLockWSHandler {
+    type Result = ();
+
+    fn handle(&mut self, _msg: LockSound, ctx: &mut Self::Context) -> Self::Result {
+        info!("sending lock to clients");
+        ctx.text("{ \"isLocked\": true }")
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct UnlockSound {}
+
+impl Handler<UnlockSound> for SoundLockWSHandler {
+    type Result = ();
+
+    fn handle(&mut self, _msg: UnlockSound, ctx: &mut Self::Context) -> Self::Result {
+        info!("sending unlock to clients");
+        ctx.text("{ \"isLocked\": false }")
     }
 }
 
