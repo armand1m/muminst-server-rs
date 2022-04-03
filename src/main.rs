@@ -11,7 +11,6 @@ mod websocket;
 
 use actix::prelude::*;
 use diesel_migrations::run_pending_migrations;
-use dotenv;
 use log::info;
 use songbird::{SerenityInit, Songbird};
 use std::env;
@@ -41,7 +40,7 @@ fn main() {
     env_logger::init_from_env(logger_env);
 
     let thread_count = env::var("THREAD_COUNT")
-        .unwrap_or(1.to_string())
+        .unwrap_or_else(|_| 1.to_string())
         .parse::<usize>()
         .expect("THREAD_COUNT env var should be a valid number");
 
@@ -66,7 +65,7 @@ async fn async_main() {
     let audio_folder_path =
         env::var("AUDIO_PATH").expect("AUDIO_PATH to be set in the environment");
     let should_run_pending_migrations = env::var("RUN_PENDING_MIGRATIONS")
-        .unwrap_or("false".to_string())
+        .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
         .expect("RUN_PENDING_MIGRATIONS should be a boolean");
 

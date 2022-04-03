@@ -73,6 +73,7 @@ pub async fn play_sound_handler(
         }));
     }
 
+    // TODO: check for failures and respond accordingly to the client
     data.discord_actor_addr
         .send(PlayAudio { audio_path })
         .await
@@ -80,6 +81,6 @@ pub async fn play_sound_handler(
 
     Ok(HttpResponse::Ok().json(PlaySoundResponse {
         sound_id: json.sound_id.clone(),
-        client: json.client.clone(),
+        client: json.client,
     }))
 }
