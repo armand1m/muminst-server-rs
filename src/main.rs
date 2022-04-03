@@ -1,7 +1,4 @@
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate diesel;
 
 mod actions;
@@ -12,19 +9,14 @@ pub mod models;
 pub mod schema;
 mod websocket;
 
+use actix::prelude::*;
 use diesel_migrations::run_pending_migrations;
 use dotenv;
 use log::info;
-use songbird::SerenityInit;
-use std::{
-    env,
-    sync::{Arc, Mutex},
-};
+use songbird::{SerenityInit, Songbird};
+use std::env;
 
-use serenity::{
-    client::{Client, Context},
-    framework::StandardFramework,
-};
+use serenity::{client::Client, framework::StandardFramework};
 
 use actix_cors::Cors;
 use actix_files::Files;
@@ -35,16 +27,12 @@ use diesel::sqlite::SqliteConnection;
 use tokio::runtime::Builder;
 
 use app_state::AppState;
-use discord::{commands::BOTCOMMANDS_GROUP, DiscordHandler};
+use discord::{actor::DiscordActor, commands::BOTCOMMANDS_GROUP, DiscordHandler};
 use handlers::{
     add_tags::add_tags_handler, play_sound::play_sound_handler, sounds::sounds_handler,
     upload::upload_handler,
 };
 use websocket::sound_lock::sound_lock_handler;
-
-lazy_static! {
-    pub static ref DISCORD_CTX: Arc<Mutex<Option<Context>>> = Arc::new(Mutex::new(None));
-}
 
 fn main() {
     dotenv::dotenv().ok();
@@ -88,10 +76,17 @@ async fn async_main() {
 
     let event_handler = DiscordHandler {};
 
+    let songbird = Songbird::serenity();
+    let discord_actor_addr = DiscordActor {
+        discord_guild_id,
+        songbird: songbird.clone(),
+    }
+    .start();
+
     let mut client = Client::builder(&token)
         .event_handler(event_handler)
         .framework(framework)
-        .register_songbird()
+        .register_songbird_with(songbird)
         .await
         .expect("Discord client instance to be created.");
 
@@ -120,18 +115,20 @@ async fn async_main() {
             .allow_any_method();
 
         let logger = Logger::default();
+        let data = Data::new(AppState {
+            app_name,
+            discord_guild_id,
+            discord_actor_addr: discord_actor_addr.clone(),
+            database_pool: database_pool.clone(),
+            audio_folder_path: audio_folder_path.clone(),
+        });
+        let websocket_handler = web::resource("/ws").to(sound_lock_handler);
 
         App::new()
             .wrap(cors)
             .wrap(logger)
-            .app_data(Data::new(AppState {
-                app_name,
-                discord_guild_id,
-                discord_ctx: DISCORD_CTX.to_owned(),
-                database_pool: database_pool.clone(),
-                audio_folder_path: audio_folder_path.clone(),
-            }))
-            .service(web::resource("/ws").to(sound_lock_handler))
+            .app_data(data)
+            .service(websocket_handler)
             .service(sounds_handler)
             .service(upload_handler)
             .service(play_sound_handler)

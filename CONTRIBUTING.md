@@ -6,7 +6,7 @@ Thanks for wanting to contribute to the Muminst rust server.
 
 Make sure you have the default rust tooling (`rustc` and `cargo`) setup.
 
-Muminst depends on `ffmpeg` and `youtubedl`, make sure to have both installed on your environment.
+Muminst depends on `opus`, `ffmpeg` and `youtubedl`. Make sure to have these installed on your environment.
 
 There is a `Dockerfile` available that can be used to create a containerized version of the server.
 Minor tweak can be done to enable a containerized development environment.
