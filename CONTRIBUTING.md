@@ -32,13 +32,54 @@ cargo run
 
 ## Watch mode
 
+Install `cargo-watch`:
+
+```sh
+cargo install cargo-watch
+```
+
+Then use the following command:
+
 ```sh
 cargo watch -x run
 ```
 
 ## Database
 
-This application makes use of Diesel to manage an SQLite database.
+This application makes use of Diesel to manage an SQLite database. Diesel is smart enough to allow us to switch to a postgres database when we see fit.
+
+### Prepare project 
+
+Run this from the root of the project:
+
+```sh
+mkdir -p ./data/audio
+```
+
+Set these in your .env file:
+
+```sh
+# (required) path to the sqlite database in the current host. the application will create and seed the db in case it does not exist.
+DATABASE_PATH=./data/database.db 
+
+# (required) path to the stored audios. will be used for both playing and uploads.
+AUDIO_PATH=./data/audio 
+```
+
+### Automatic migration and database setup
+
+Make sure to set the following env var in your `.env` file:
+
+```sh
+# (optional, default = false) run pending database migrations during server startup
+RUN_PENDING_MIGRATIONS=true
+```
+
+Now just run `cargo run` and you should have the app with a database up and running.
+
+After that, disable `RUN_PENDING_MIGRATIONS` in your `.env` file in case you feel you don't want that to happen without you knowing about it.
+
+### Manual migration and database setup
 
 Run the following to install diesel cli, setup your machine and run the migrations.
 

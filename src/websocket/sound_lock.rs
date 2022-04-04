@@ -1,5 +1,7 @@
+use crate::lock::messages::{LockSound, UnlockSound};
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
+use actix_broker::BrokerSubscribe;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use log::info;
@@ -14,13 +16,13 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 struct SoundLockWSHandler {
     /// Client must send ping at least once per 10 seconds (CLIENT_TIMEOUT),
     /// otherwise we drop connection.
-    heartbeat: Instant,
+    heartbeat_ts: Instant,
 }
 
 impl SoundLockWSHandler {
     pub fn new() -> Self {
         Self {
-            heartbeat: Instant::now(),
+            heartbeat_ts: Instant::now(),
         }
     }
 
@@ -28,7 +30,7 @@ impl SoundLockWSHandler {
     /// also this method checks heartbeats from client
     fn heartbeat(&self, ctx: &mut <Self as Actor>::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
-            if Instant::now().duration_since(act.heartbeat) > CLIENT_TIMEOUT {
+            if Instant::now().duration_since(act.heartbeat_ts) > CLIENT_TIMEOUT {
                 info!("Websocket client heartbeat timed out. Disconnecting.");
                 ctx.stop();
                 return;
@@ -45,21 +47,31 @@ impl Actor for SoundLockWSHandler {
     /// Method is called on actor start. We start the heartbeat process here.
     fn started(&mut self, ctx: &mut Self::Context) {
         self.heartbeat(ctx);
+        self.subscribe_system_async::<LockSound>(ctx);
+        self.subscribe_system_async::<UnlockSound>(ctx);
     }
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SoundLockWSHandler {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         // process websocket messages
-        info!("{:?}", msg);
+        info!("stream_handler message: {:?}", msg);
 
         match msg {
             Ok(ws::Message::Ping(msg)) => {
-                self.heartbeat = Instant::now();
                 ctx.pong(&msg);
             }
-            Ok(ws::Message::Pong(_)) => {
-                self.heartbeat = Instant::now();
+            Ok(ws::Message::Text(msg)) => {
+                // This is some sort of a hack and should not be needed,
+                // since the ws spec has it's own ping implementation which
+                // actix already implements
+                if msg == "{\"type\":\"PING\"}" {
+                    ctx.pong(b"")
+                }
+            }
+            Ok(ws::Message::Pong(msg)) => {
+                info!("pong message: {:?}", msg);
+                self.heartbeat_ts = Instant::now();
             }
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
@@ -70,10 +82,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SoundLockWSHandle
     }
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct LockSound {}
-
 impl Handler<LockSound> for SoundLockWSHandler {
     type Result = ();
 
@@ -82,10 +90,6 @@ impl Handler<LockSound> for SoundLockWSHandler {
         ctx.text("{ \"isLocked\": true }")
     }
 }
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct UnlockSound {}
 
 impl Handler<UnlockSound> for SoundLockWSHandler {
     type Result = ();
@@ -100,5 +104,6 @@ pub async fn sound_lock_handler(
     req: HttpRequest,
     stream: web::Payload,
 ) -> Result<HttpResponse, Error> {
-    ws::start(SoundLockWSHandler::new(), &req, stream)
+    let handler = SoundLockWSHandler::new();
+    ws::start(handler, &req, stream)
 }

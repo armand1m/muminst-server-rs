@@ -5,6 +5,7 @@ mod actions;
 mod app_state;
 mod discord;
 mod handlers;
+mod lock;
 pub mod models;
 pub mod schema;
 mod websocket;
@@ -114,6 +115,7 @@ async fn async_main() {
             .allow_any_method();
 
         let logger = Logger::default();
+
         let app_data = Data::new(AppState {
             app_name,
             discord_guild_id,

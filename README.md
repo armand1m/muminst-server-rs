@@ -56,10 +56,11 @@ Follow up on the feature compatibility list to get familiar with ongoing progres
     - [x] actix websocket setup 
     - [x] /ws route
         - [ ] Notifies locked state to clients
-        - [ ] Manages connections correctly
+        - [x] Manages connections correctly
 - [x] Discord Client
     - [x] Reconnects in case of disconnect events from the discord server
     - [x] Enable consumers to play audio outside of a command function. _(e.g.: from an endpoint handler)_
+      - Audio can be played through messaging to the Discord Actor address, which is available in Actix Web Data context in case you need access from a middleware or an endpoint handler.
 - [ ] Telegram Client
     - [ ] Sends audio to telegram in case the `POST /play-sound` endpoint receives `telegram` as a client
 - [x] Thread management
