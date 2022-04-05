@@ -1,4 +1,6 @@
+pub mod actor;
 pub mod commands;
+use log::info;
 
 use serenity::{
     async_trait,
@@ -9,15 +11,11 @@ pub struct DiscordHandler;
 
 #[async_trait]
 impl EventHandler for DiscordHandler {
-    async fn ready(&self, ctx: Context, ready: Ready) {
-        println!("Bot connected as \"{}\".", ready.user.name);
-        {
-            let ctx_mutex = &*crate::DISCORD_CTX;
-            *ctx_mutex.lock().unwrap() = Some(ctx);
-        }
+    async fn ready(&self, _ctx: Context, ready: Ready) {
+        info!("Discord Client connected as \"{}\".", ready.user.name);
     }
 
     async fn resume(&self, _ctx: Context, _: ResumedEvent) {
-        println!("Bot reconnected.");
+        info!("Discord Client connection was resumed.");
     }
 }

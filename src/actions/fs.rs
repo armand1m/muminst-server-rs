@@ -22,7 +22,7 @@ pub async fn save_sound_as_file(
      */
     let file = web::block(move || {
         let mut file = File::create(filepath).expect("File to be created");
-        file.write_all(&memory_file.get_ref())
+        file.write_all(memory_file.get_ref())
             .expect("File content to be written to filesystem");
         file
     })
@@ -41,9 +41,9 @@ pub async fn validate_sound(
      * to the disk
      */
     let mut memory_file = Cursor::new(Vec::<u8>::new());
-    let mut content_iter = file_content.to_owned().into_iter();
+    let mut content_iter = file_content.iter().cloned();
 
-    while let Some(chunk) = content_iter.next() {
+    for chunk in content_iter.by_ref() {
         memory_file = web::block(move || memory_file.write_all(&chunk).map(|_| memory_file))
             .await
             .expect("File content to be written")?;
@@ -54,11 +54,10 @@ pub async fn validate_sound(
     let file_type = match infer::get(file_type_slice) {
         Some(file_type) => file_type,
         None => {
-            return Err(std::io::Error::new(
+            return Err(Error::new(
                 ErrorKind::InvalidData,
                 "Failed to identify the file type.",
-            )
-            .into());
+            ));
         }
     };
 
@@ -66,7 +65,7 @@ pub async fn validate_sound(
     let valid_extensions = ["mp3", "wav", "ogg", "webm"];
 
     if !valid_extensions.contains(&file_extension) {
-        return Err(std::io::Error::new(ErrorKind::InvalidData, "File type is not valid").into());
+        return Err(Error::new(ErrorKind::InvalidData, "File type is not valid"));
     }
 
     /*

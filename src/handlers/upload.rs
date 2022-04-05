@@ -190,7 +190,7 @@ async fn upload_payload_file(
     })
     .await?;
 
-    if let Some(_) = sound_hash_match {
+    if sound_hash_match.is_some() {
         return Err(std::io::Error::new(ErrorKind::AlreadyExists, "File already exists").into());
     }
 

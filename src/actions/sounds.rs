@@ -16,7 +16,7 @@ pub fn fetch_sounds_with_tags(
         .load::<Tag>(database_connection)?
         .grouped_by(&sounds);
 
-    let data = sounds.into_iter().zip(tags).collect::<Vec<_>>();
+    let data = sounds.into_iter().zip(tags);
     let sounds = data
         .into_iter()
         .map(|(x, tags)| SoundWithTags {
@@ -53,9 +53,7 @@ pub fn fetch_sound_with_tags_by_id(
         .optional()
         .expect("Failed to query by sound_id");
 
-    if query_result.is_none() {
-        return None;
-    }
+    query_result.as_ref()?;
 
     let sound = query_result.unwrap();
     let tags = Tag::belonging_to(&sound)
