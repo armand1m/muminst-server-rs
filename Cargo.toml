@@ -21,7 +21,7 @@ actix-broker = "0.4.2"
 diesel = { version = "1.4.4", features = ["sqlite", "r2d2"] }
 diesel_migrations = "1.4.0"
 uuid = { version = "0.8", features = ["v4"] }
-infer = "0.5.0"
+infer = "0.7.0"
 sha256 = "1.0.3"
 
 [dependencies.serenity]

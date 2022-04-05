@@ -50,7 +50,7 @@ pub async fn validate_sound(
     }
 
     let memory_file_buf = memory_file.get_ref();
-    let file_type_slice = &memory_file_buf[0..4];
+    let file_type_slice = &memory_file_buf[0..12];
     let file_type = match infer::get(file_type_slice) {
         Some(file_type) => file_type,
         None => {
