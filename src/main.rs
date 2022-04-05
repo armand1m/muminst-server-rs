@@ -117,7 +117,7 @@ async fn main() {
             .service(upload_handler)
             .service(play_sound_handler)
             .service(add_tags_handler)
-            .service(Files::new("/assets", "./data/audio"))
+            .service(Files::new("/assets", audio_folder_path.clone()))
     })
     .bind("0.0.0.0:8080")
     .expect("Failed to bind http server to 0.0.0.0:8080")
