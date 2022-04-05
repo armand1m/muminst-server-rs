@@ -5,8 +5,8 @@ metadata:
   namespace: default
 spec:
   hosts:
-  - muminst-server-rust.d1m.dev
-  - muminst-server-rust.armand1m.dev
+  - muminst-server.d1m.dev
+  - muminst-server.armand1m.dev
   gateways:
   - ingressgateway-workload
   http:

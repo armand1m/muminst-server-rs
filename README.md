@@ -46,7 +46,7 @@ Follow up on the feature compatibility list to get familiar with ongoing progres
             - [x] mp3
             - [x] webm
             - [x] ogg
-            - [ ] wav
+            - [x] wav
         - [x] Checks if sound already exists in the database
         - [x] Uploads sound to disk
         - [x] Inserts sound record in the database
