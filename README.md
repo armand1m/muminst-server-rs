@@ -52,10 +52,10 @@ Follow up on the feature compatibility list to get familiar with ongoing progres
         - [x] Inserts sound record in the database
         - [x] Inserts given tags
     - [x] PUT /add-tags/:sound_id
-- [ ] Websocket Server
+- [x] Websocket Server
     - [x] actix websocket setup 
     - [x] /ws route
-        - [ ] Notifies locked state to clients
+        - [x] Notifies locked state to clients
         - [x] Manages connections correctly
 - [x] Discord Client
     - [x] Reconnects in case of disconnect events from the discord server
@@ -66,3 +66,4 @@ Follow up on the feature compatibility list to get familiar with ongoing progres
 - [x] Thread management
     - [x] Supports multiple worker threads
     - [x] Terminates the entire process and child threads in case one gets terminated.
+
