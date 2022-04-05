@@ -20,11 +20,9 @@ use serenity::{client::Client, framework::StandardFramework};
 
 use actix_cors::Cors;
 use actix_files::Files;
-use actix_web::rt::System;
 use actix_web::{middleware::Logger, web, web::Data, App, HttpServer};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::sqlite::SqliteConnection;
-use tokio::runtime::Builder;
 
 use app_state::AppState;
 use discord::{actor::DiscordActor, commands::BOTCOMMANDS_GROUP, DiscordHandler};
@@ -34,28 +32,13 @@ use handlers::{
 };
 use websocket::sound_lock::sound_lock_handler;
 
-fn main() {
+#[actix_web::main]
+async fn main() {
     dotenv::dotenv().ok();
 
     let logger_env = env_logger::Env::new().default_filter_or("info,tracing::span=off");
     env_logger::init_from_env(logger_env);
 
-    let thread_count = env::var("THREAD_COUNT")
-        .unwrap_or_else(|_| 1.to_string())
-        .parse::<usize>()
-        .expect("THREAD_COUNT env var should be a valid number");
-
-    System::with_tokio_rt(|| {
-        Builder::new_multi_thread()
-            .enable_all()
-            .worker_threads(thread_count)
-            .build()
-            .unwrap()
-    })
-    .block_on(async_main());
-}
-
-async fn async_main() {
     let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN to be set in the environment");
     let discord_guild_id = env::var("DISCORD_GUILD_ID")
         .expect("DISCORD_GUILD_ID to be set in the environment")
@@ -90,7 +73,7 @@ async fn async_main() {
         .await
         .expect("Discord client instance to be created.");
 
-    let discord_client_thread = tokio::spawn(async move {
+    let discord_client_thread = actix_web::rt::spawn(async move {
         client
             .start()
             .await
