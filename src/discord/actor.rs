@@ -1,6 +1,9 @@
 use std::{path::PathBuf, sync::Arc};
 
-use crate::lock::messages::{LockSound, UnlockSound};
+use crate::{
+    lock::messages::{Lock, WsUnlockSound},
+    models::Sound,
+};
 use actix::prelude::*;
 use actix_broker::{Broker, SystemBroker};
 use log::info;
@@ -16,7 +19,7 @@ struct SongEndNotifier {}
 #[async_trait()]
 impl VoiceEventHandler for SongEndNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        Broker::<SystemBroker>::issue_async(UnlockSound {});
+        Broker::<SystemBroker>::issue_async(WsUnlockSound {});
         None
     }
 }
@@ -31,6 +34,7 @@ pub struct DiscordActor {
 #[rtype(result = "()")]
 pub struct PlayAudio {
     pub audio_path: PathBuf,
+    pub sound: Sound,
 }
 
 impl Actor for DiscordActor {
@@ -50,6 +54,7 @@ impl Handler<PlayAudio> for DiscordActor {
 
     fn handle(&mut self, msg: PlayAudio, ctx: &mut Self::Context) -> Self::Result {
         let audio_path = msg.audio_path;
+        let sound = msg.sound;
         let guild_id: GuildId = self.discord_guild_id.into();
         let manager = self.songbird.clone();
 
@@ -61,8 +66,7 @@ impl Handler<PlayAudio> for DiscordActor {
                     .expect("ffmpeg parameters to be properly defined");
 
                 let mut handler = handler_lock.lock().await;
-
-                Broker::<SystemBroker>::issue_async(LockSound {});
+                Broker::<SystemBroker>::issue_async(Lock { sound });
 
                 let track_handle = handler.play_source(sound_src.into());
                 let _ = track_handle.add_event(Event::Track(TrackEvent::End), SongEndNotifier {});

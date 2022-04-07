@@ -1,4 +1,4 @@
-use crate::lock::messages::{LockSound, UnlockSound};
+use crate::lock::messages::{GetLockStatus, WsLockSound, WsUnlockSound};
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
 use actix_broker::BrokerSubscribe;
@@ -47,8 +47,11 @@ impl Actor for SoundLockWSHandler {
     /// Method is called on actor start. We start the heartbeat process here.
     fn started(&mut self, ctx: &mut Self::Context) {
         self.heartbeat(ctx);
-        self.subscribe_system_async::<LockSound>(ctx);
-        self.subscribe_system_async::<UnlockSound>(ctx);
+        self.subscribe_system_async::<WsLockSound>(ctx);
+        self.subscribe_system_async::<WsUnlockSound>(ctx);
+
+        // TODO: Send a GetLockStatus message and update the client with the result
+        // self.issue_system_async(GetLockStatus);
     }
 }
 
@@ -82,20 +85,20 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for SoundLockWSHandle
     }
 }
 
-impl Handler<LockSound> for SoundLockWSHandler {
+impl Handler<WsLockSound> for SoundLockWSHandler {
     type Result = ();
 
-    fn handle(&mut self, _msg: LockSound, ctx: &mut Self::Context) -> Self::Result {
-        info!("sending lock to clients");
+    fn handle(&mut self, _msg: WsLockSound, ctx: &mut Self::Context) -> Self::Result {
+        info!("sending lock to client");
         ctx.text("{ \"isLocked\": true }")
     }
 }
 
-impl Handler<UnlockSound> for SoundLockWSHandler {
+impl Handler<WsUnlockSound> for SoundLockWSHandler {
     type Result = ();
 
-    fn handle(&mut self, _msg: UnlockSound, ctx: &mut Self::Context) -> Self::Result {
-        info!("sending unlock to clients");
+    fn handle(&mut self, _msg: WsUnlockSound, ctx: &mut Self::Context) -> Self::Result {
+        info!("sending unlock to client");
         ctx.text("{ \"isLocked\": false }")
     }
 }

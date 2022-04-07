@@ -32,6 +32,8 @@ use handlers::{
 };
 use websocket::sound_lock::sound_lock_handler;
 
+use crate::lock::lock_actor::SoundLockActor;
+
 #[actix_web::main]
 async fn main() {
     dotenv::dotenv().ok();
@@ -58,6 +60,7 @@ async fn main() {
         .group(&BOTCOMMANDS_GROUP);
 
     let event_handler = DiscordHandler {};
+    let sound_lock_actor_addr = SoundLockActor::new().start();
 
     let songbird = Songbird::serenity();
     let discord_actor_addr = DiscordActor {
@@ -103,6 +106,7 @@ async fn main() {
             app_name,
             discord_guild_id,
             discord_actor_addr: discord_actor_addr.clone(),
+            sound_lock_actor_addr: sound_lock_actor_addr.clone(),
             database_pool: database_pool.clone(),
             audio_folder_path: audio_folder_path.clone(),
         });
