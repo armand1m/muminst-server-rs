@@ -55,13 +55,14 @@ impl Handler<PlayAudio> for DiscordActor {
 
         async move {
             if let Some(handler_lock) = manager.get(guild_id) {
-                let bitrate = Bitrate::BitsPerSecond(48_000);
+                // TODO: find a way to fetch the bitrate from
+                // the channel itself and calculate it properly
+                let bitrate = Bitrate::BitsPerSecond(40_000);
                 let audio_source = input::ffmpeg(&audio_path).await.expect("Link may be dead.");
                 let sound_src = Compressed::new(audio_source, bitrate)
                     .expect("ffmpeg parameters to be properly defined");
 
                 let mut handler = handler_lock.lock().await;
-
                 Broker::<SystemBroker>::issue_async(LockSound {});
 
                 let track_handle = handler.play_source(sound_src.into());

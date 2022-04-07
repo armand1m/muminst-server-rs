@@ -8,10 +8,12 @@ use serenity::{
     Result as SerenityResult,
 };
 
+use log::error;
+
 /// Checks that a message successfully sent; if not, then logs why to stdout.
 fn check_msg(result: SerenityResult<Message>) {
     if let Err(reason) = result {
-        println!("Error sending message: {:?}", reason);
+        error!("Error sending message: {:?}", reason);
     }
 }
 
@@ -126,7 +128,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         let source = match songbird::ytdl(&url).await {
             Ok(source) => source,
             Err(why) => {
-                println!("Err starting source: {:?}", why);
+                error!("Err starting source: {:?}", why);
 
                 check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
 

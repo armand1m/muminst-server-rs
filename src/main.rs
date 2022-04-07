@@ -12,7 +12,7 @@ mod websocket;
 
 use actix::prelude::*;
 use diesel_migrations::run_pending_migrations;
-use log::info;
+use log::{error, info};
 use songbird::{SerenityInit, Songbird};
 use std::env;
 
@@ -73,11 +73,13 @@ async fn main() {
         .await
         .expect("Discord client instance to be created.");
 
+    let shard_manager = client.shard_manager.clone();
+
     let discord_client_thread = actix_web::rt::spawn(async move {
-        client
-            .start()
+        let _ = client
+            .start_autosharded()
             .await
-            .map_err(|reason| eprintln!("Discord client connection was terminated: {:?}", reason))
+            .map_err(|reason| error!("Discord client connection was terminated: {:?}", reason));
     });
 
     let manager = ConnectionManager::<SqliteConnection>::new(database_path);
@@ -133,6 +135,8 @@ async fn main() {
     };
 
     tokio::signal::ctrl_c().await.unwrap();
+
+    shard_manager.lock().await.shutdown_all().await;
 
     info!("Received Ctrl-C, shutting down.");
 }
