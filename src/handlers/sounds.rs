@@ -3,6 +3,7 @@ use actix_web::{
     web::{self, Data},
     Error, HttpResponse,
 };
+use log::error;
 use serde::Serialize;
 
 use crate::{actions::sounds::fetch_sounds_with_tags, app_state::AppState};
@@ -28,7 +29,7 @@ pub async fn sounds_handler(data: Data<AppState>) -> Result<HttpResponse, Error>
     let response = match result {
         Ok(sounds) => sounds,
         Err(reason) => {
-            eprintln!("Failed to fetch sounds from database. Reason: {:?}", reason);
+            error!("Failed to fetch sounds from database. Reason: {:?}", reason);
             return Ok(HttpResponse::InternalServerError().json(ErrorPayload {
                 message: "Server failed to fetch sounds from database.".to_string(),
             }));
