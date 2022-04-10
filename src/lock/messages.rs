@@ -2,10 +2,19 @@ use actix::Message;
 
 use crate::models::Sound;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct LockStatus {
     pub is_locked: bool,
     pub sound: Option<Sound>,
+}
+
+impl LockStatus {
+    pub fn new() -> LockStatus {
+        LockStatus {
+            is_locked: false,
+            sound: None,
+        }
+    }
 }
 
 #[derive(Clone, Message)]
@@ -26,6 +35,12 @@ pub struct Lock {
 #[rtype(result = "()")]
 pub struct Unlock;
 
-#[derive(Message, Clone)]
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "Option<LockStatus>")]
 pub struct GetLockStatus;
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct GetLockStatusResponse {
+    pub status: LockStatus,
+}

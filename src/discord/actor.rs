@@ -57,6 +57,7 @@ impl Handler<PlayAudio> for DiscordActor {
         let sound = msg.sound;
         let guild_id: GuildId = self.discord_guild_id.into();
         let manager = self.songbird.clone();
+        info!("Handling play audio");
 
         async move {
             if let Some(handler_lock) = manager.get(guild_id) {

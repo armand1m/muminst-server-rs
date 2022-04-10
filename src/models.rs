@@ -2,7 +2,9 @@ use crate::schema::{sounds, tags};
 
 use diesel::Queryable;
 use serde::{Deserialize, Serialize};
-#[derive(Queryable, Associations, Identifiable, Deserialize, Serialize, Insertable, Clone)]
+#[derive(
+    Queryable, Associations, Identifiable, Deserialize, Serialize, Insertable, Clone, Debug,
+)]
 #[table_name = "sounds"]
 #[serde(rename_all = "camelCase")]
 pub struct Sound {
