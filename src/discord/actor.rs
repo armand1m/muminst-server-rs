@@ -59,21 +59,22 @@ impl Handler<PlayAudio> for DiscordActor {
         let manager = self.songbird.clone();
         info!("Handling play audio");
 
-        async move {
+        let future = async move {
             if let Some(handler_lock) = manager.get(guild_id) {
                 let bitrate = Bitrate::BitsPerSecond(48_000);
                 let audio_source = input::ffmpeg(&audio_path).await.expect("Link may be dead.");
                 let sound_src = Compressed::new(audio_source, bitrate)
                     .expect("ffmpeg parameters to be properly defined");
 
-                let mut handler = handler_lock.lock().await;
                 Broker::<SystemBroker>::issue_async(Lock { sound });
+                let mut handler = handler_lock.lock().await;
 
                 let track_handle = handler.play_source(sound_src.into());
                 let _ = track_handle.add_event(Event::Track(TrackEvent::End), SongEndNotifier {});
             }
         }
-        .into_actor(self)
-        .wait(ctx);
+        .into_actor(self);
+
+        future.wait(ctx);
     }
 }

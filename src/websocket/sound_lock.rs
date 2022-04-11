@@ -3,7 +3,7 @@ use crate::lock::lock_actor::SoundLockActor;
 use crate::lock::messages::{GetLockStatus, GetLockStatusResponse, WsLockSound, WsUnlockSound};
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
-use actix_broker::BrokerSubscribe;
+use actix_broker::{Broker, BrokerSubscribe, SystemBroker};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use log::info;
@@ -55,30 +55,38 @@ impl Actor for SoundLockWsActor {
         self.heartbeat(ctx);
         self.subscribe_system_async::<WsLockSound>(ctx);
         self.subscribe_system_async::<WsUnlockSound>(ctx);
-        async move {
-            let result = self.sound_lock_actor_addr.send(GetLockStatus {}).await?;
+
+        let sound_lock_actor_addr_clone = self.sound_lock_actor_addr.clone();
+
+        let future = async move {
+            let result = sound_lock_actor_addr_clone.send(GetLockStatus {}).await;
             match result {
-                Some(status) => {
+                Ok(Some(status)) => {
+                    info!("current status is: {:?}", status);
                     if status.is_locked {
-                        ctx.text("{ \"isLocked\": true }")
+                        Broker::<SystemBroker>::issue_async(WsLockSound {});
                     } else {
-                        ctx.text("{ \"isLocked\": false }")
+                        Broker::<SystemBroker>::issue_async(WsUnlockSound {});
                     }
                 }
-                None => ctx.text("{ \"isLocked\": false }"),
+                Ok(None) => {
+                    Broker::<SystemBroker>::issue_async(WsUnlockSound {});
+                }
+                Err(_) => {
+                    Broker::<SystemBroker>::issue_async(WsUnlockSound {});
+                }
             }
-            Ok(result)
         }
-        .into_actor(self)
-        // TODO: Solve this error or find another way to run this future
-        .spawn(ctx);
+        .into_actor(self);
+
+        future.wait(ctx);
     }
 }
 
 impl Handler<GetLockStatusResponse> for SoundLockWsActor {
     type Result = ();
 
-    fn handle(&mut self, msg: GetLockStatusResponse, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: GetLockStatusResponse, _ctx: &mut Self::Context) -> Self::Result {
         info!(" Receiving GetLockStatusResponse {:?}", msg);
     }
 }
@@ -134,9 +142,9 @@ impl Handler<WsUnlockSound> for SoundLockWsActor {
 pub async fn sound_lock_handler(
     req: HttpRequest,
     stream: web::Payload,
+    data: web::Data<AppState>,
 ) -> Result<HttpResponse, Error> {
     info!("Receive /ws request");
-    let app_data = req.app_data::<AppState>().unwrap();
-    let actor = SoundLockWsActor::new(app_data.sound_lock_actor_addr.clone());
+    let actor = SoundLockWsActor::new(data.sound_lock_actor_addr.clone());
     ws::start(actor, &req, stream)
 }

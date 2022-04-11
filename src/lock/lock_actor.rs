@@ -32,7 +32,7 @@ impl Handler<Lock> for SoundLockActor {
     fn handle(&mut self, msg: Lock, _ctx: &mut Context<Self>) -> Self::Result {
         info!("Handling LOCK from lock_actor");
         self.status = LockStatus {
-            sound: Some(msg.sound.clone()),
+            sound: Some(msg.sound),
             is_locked: true,
         };
         self.issue_system_async(WsLockSound {});
