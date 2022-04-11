@@ -1,7 +1,10 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    lock::messages::{Lock, Unlock},
+    lock::{
+        lock_actor::SoundLockActor,
+        messages::{GetLockStatus, Lock, Unlock},
+    },
     models::Sound,
 };
 use actix::prelude::*;
@@ -27,6 +30,7 @@ impl VoiceEventHandler for SongEndNotifier {
 pub struct DiscordActor {
     pub discord_guild_id: u64,
     pub songbird: Arc<Songbird>,
+    pub sound_lock_actor_addr: Addr<SoundLockActor>,
 }
 
 /// Define message
@@ -59,7 +63,20 @@ impl Handler<PlayAudio> for DiscordActor {
         let manager = self.songbird.clone();
         info!("Handling play audio");
 
+        let sound_lock_actor_addr_clone = self.sound_lock_actor_addr.clone();
+
         let future = async move {
+            let sound_lock_status = sound_lock_actor_addr_clone
+                .send(GetLockStatus {})
+                .await
+                .unwrap();
+
+            if let Some(status) = sound_lock_status {
+                if status.is_locked {
+                    return;
+                }
+            }
+
             if let Some(handler_lock) = manager.get(guild_id) {
                 let bitrate = Bitrate::BitsPerSecond(48_000);
                 let audio_source = input::ffmpeg(&audio_path).await.expect("Link may be dead.");

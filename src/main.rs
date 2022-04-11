@@ -66,6 +66,7 @@ async fn main() {
     let discord_actor_addr = DiscordActor {
         discord_guild_id,
         songbird: songbird.clone(),
+        sound_lock_actor_addr: sound_lock_actor_addr.clone(),
     }
     .start();
 
