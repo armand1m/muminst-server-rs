@@ -54,17 +54,20 @@ pub async fn play_sound_handler(
     })
     .await?;
 
-    let audio_path = match sound {
-        Some(sound) => {
-            let mut path = audio_folder_path.join(sound.file_name);
-            path.set_extension(sound.extension);
-            path
-        }
+    let sound = match sound {
+        Some(sound) => sound,
         None => {
             return Ok(HttpResponse::ExpectationFailed().json(ErrorPayload {
                 message: format!("Failed to find sound with id: {}", json.sound_id),
             }));
         }
+    };
+
+    let audio_path = {
+        let sound = sound.clone();
+        let mut path = audio_folder_path.join(sound.file_name);
+        path.set_extension(sound.extension);
+        path
     };
 
     if !audio_path.exists() {
@@ -75,7 +78,7 @@ pub async fn play_sound_handler(
 
     // TODO: check for failures and respond accordingly to the client
     data.discord_actor_addr
-        .send(PlayAudio { audio_path })
+        .send(PlayAudio { audio_path, sound })
         .await
         .expect("Failed to play audio");
 
