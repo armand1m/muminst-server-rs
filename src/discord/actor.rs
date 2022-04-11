@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use crate::{
-    lock::messages::{Lock, WsUnlockSound},
+    lock::messages::{Lock, Unlock},
     models::Sound,
 };
 use actix::prelude::*;
@@ -19,7 +19,7 @@ struct SongEndNotifier {}
 #[async_trait()]
 impl VoiceEventHandler for SongEndNotifier {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        Broker::<SystemBroker>::issue_async(WsUnlockSound {});
+        Broker::<SystemBroker>::issue_async(Unlock {});
         None
     }
 }

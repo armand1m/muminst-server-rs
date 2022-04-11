@@ -30,11 +30,12 @@ impl Handler<Lock> for SoundLockActor {
     type Result = ();
 
     fn handle(&mut self, msg: Lock, _ctx: &mut Context<Self>) -> Self::Result {
-        info!("Handling LOCK from lock_actor");
+        info!("handling lock with sound '{}'", msg.sound.name);
         self.status = LockStatus {
             sound: Some(msg.sound),
             is_locked: true,
         };
+
         self.issue_system_async(WsLockSound {});
     }
 }
@@ -43,6 +44,7 @@ impl Handler<Unlock> for SoundLockActor {
     type Result = ();
 
     fn handle(&mut self, _msg: Unlock, _ctx: &mut Context<Self>) -> Self::Result {
+        info!("handling unlock");
         self.status = LockStatus::new();
         self.issue_system_async(WsUnlockSound {});
     }
