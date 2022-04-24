@@ -17,6 +17,7 @@ use songbird::{SerenityInit, Songbird};
 use std::env;
 
 use serenity::{client::Client, framework::StandardFramework};
+use teloxide::prelude::*;
 
 use actix_cors::Cors;
 use actix_files::Files;
@@ -41,7 +42,10 @@ async fn main() {
     let logger_env = env_logger::Env::new().default_filter_or("info,tracing::span=off");
     env_logger::init_from_env(logger_env);
 
-    let token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN to be set in the environment");
+    let discord_token =
+        env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN to be set in the environment");
+    let telegram_chat_id =
+        env::var("TELEGRAM_CHAT_ID").expect("TELEGRAM_CHAT_ID to be set in the environment");
     let discord_guild_id = env::var("DISCORD_GUILD_ID")
         .expect("DISCORD_GUILD_ID to be set in the environment")
         .parse::<u64>()
@@ -70,7 +74,7 @@ async fn main() {
     }
     .start();
 
-    let mut client = Client::builder(&token)
+    let mut client = Client::builder(&discord_token)
         .event_handler(event_handler)
         .framework(framework)
         .register_songbird_with(songbird)
@@ -95,6 +99,7 @@ async fn main() {
     }
 
     let http_server_thread = HttpServer::new(move || {
+        let telegram_bot = Bot::from_env().auto_send();
         let app_name = "muminst-server-rust".to_string();
         let cors = Cors::default()
             .allow_any_origin()
@@ -106,6 +111,8 @@ async fn main() {
         let app_data = Data::new(AppState {
             app_name,
             discord_guild_id,
+            telegram_bot,
+            telegram_chat_id: telegram_chat_id.clone(),
             discord_actor_addr: discord_actor_addr.clone(),
             sound_lock_actor_addr: sound_lock_actor_addr.clone(),
             database_pool: database_pool.clone(),

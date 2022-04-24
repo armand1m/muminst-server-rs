@@ -5,11 +5,13 @@ use actix_web::{
     web::{self, Data, Json},
     Error, HttpResponse,
 };
+use log::debug;
 use serde::{Deserialize, Serialize};
+use teloxide::{prelude::*, types::InputFile};
 
 use crate::{actions::sounds::fetch_sound_by_id, app_state::AppState, discord::actor::PlayAudio};
 
-#[derive(Deserialize, Serialize, Clone, Copy)]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug)]
 #[serde(rename_all = "camelCase")]
 enum Client {
     Discord,
@@ -29,7 +31,7 @@ struct ErrorPayload {
     message: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct PlaySoundResponse {
     sound_id: String,
@@ -76,11 +78,26 @@ pub async fn play_sound_handler(
         }));
     }
 
-    // TODO: check for failures and respond accordingly to the client
-    data.discord_actor_addr
-        .send(PlayAudio { audio_path, sound })
-        .await
-        .expect("Failed to play audio");
+    debug!("json client is {:?}", &json.client);
+
+    match json.client {
+        Client::Discord => {
+            data.discord_actor_addr
+                .send(PlayAudio { audio_path, sound })
+                .await
+                .expect("Failed to play audio");
+        }
+        Client::Telegram => {
+            let chat_id = data.telegram_chat_id.clone();
+            let file = InputFile::file(&audio_path).file_name(sound.name.clone());
+            debug!(
+                "sending audio at {:?} to telegram chat id: {:?}",
+                sound.name, chat_id
+            );
+
+            let _ = data.telegram_bot.send_audio(chat_id, file).await;
+        }
+    }
 
     Ok(HttpResponse::Ok().json(PlaySoundResponse {
         sound_id: json.sound_id.clone(),
