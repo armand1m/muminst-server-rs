@@ -1,6 +1,6 @@
 use crate::app_state::AppState;
 use crate::lock::lock_actor::SoundLockActor;
-use crate::lock::messages::{GetLockStatus, GetLockStatusResponse, WsLockSound, WsUnlockSound};
+use crate::lock::messages::{GetLockStatus, WsLockSound, WsUnlockSound};
 use actix::prelude::*;
 use actix::{Actor, StreamHandler};
 use actix_broker::{Broker, BrokerSubscribe, SystemBroker};
@@ -62,7 +62,6 @@ impl Actor for SoundLockWsActor {
             let result = sound_lock_actor_addr_clone.send(GetLockStatus {}).await;
             match result {
                 Ok(Some(status)) => {
-                    info!("current status is: {:?}", status);
                     if status.is_locked {
                         Broker::<SystemBroker>::issue_async(WsLockSound {});
                     } else {
@@ -80,14 +79,6 @@ impl Actor for SoundLockWsActor {
         .into_actor(self);
 
         future.wait(ctx);
-    }
-}
-
-impl Handler<GetLockStatusResponse> for SoundLockWsActor {
-    type Result = ();
-
-    fn handle(&mut self, msg: GetLockStatusResponse, _ctx: &mut Self::Context) -> Self::Result {
-        info!(" Receiving GetLockStatusResponse {:?}", msg);
     }
 }
 

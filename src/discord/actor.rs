@@ -61,7 +61,6 @@ impl Handler<PlayAudio> for DiscordActor {
         let sound = msg.sound;
         let guild_id: GuildId = self.discord_guild_id.into();
         let manager = self.songbird.clone();
-        info!("Handling play audio");
 
         let sound_lock_actor_addr_clone = self.sound_lock_actor_addr.clone();
 
@@ -73,20 +72,21 @@ impl Handler<PlayAudio> for DiscordActor {
 
             if let Some(status) = sound_lock_status {
                 if status.is_locked {
+                    info!("Sound Lock is locked. Not playing audio.");
                     return;
                 }
             }
 
             if let Some(handler_lock) = manager.get(guild_id) {
-                let bitrate = Bitrate::BitsPerSecond(48_000);
+                info!("Playing audio");
+                let bitrate = Bitrate::BitsPerSecond(128_000);
                 let audio_source = input::ffmpeg(&audio_path).await.expect("Link may be dead.");
                 let sound_src = Compressed::new(audio_source, bitrate)
                     .expect("ffmpeg parameters to be properly defined");
 
                 Broker::<SystemBroker>::issue_async(Lock { sound });
                 let mut handler = handler_lock.lock().await;
-
-                let track_handle = handler.play_source(sound_src.into());
+                let track_handle = handler.play_only_source(sound_src.into());
                 let _ = track_handle.add_event(Event::Track(TrackEvent::End), SongEndNotifier {});
             }
         }
