@@ -1,8 +1,7 @@
+use crate::lock::messages::{GetLockStatus, Lock, LockStatus, Unlock, WsLockSound, WsUnlockSound};
 use actix::{Actor, Context, Handler};
 use actix_broker::{BrokerIssue, BrokerSubscribe};
-use log::info;
-
-use super::messages::{GetLockStatus, Lock, LockStatus, Unlock, WsLockSound, WsUnlockSound};
+use log::{debug, info};
 
 #[derive(Clone)]
 pub struct SoundLockActor {
@@ -35,7 +34,7 @@ impl Handler<Lock> for SoundLockActor {
             sound: Some(msg.sound),
             is_locked: true,
         };
-
+        debug!("set status to {:?}", self.status);
         self.issue_system_async(WsLockSound {});
     }
 }
@@ -46,6 +45,7 @@ impl Handler<Unlock> for SoundLockActor {
     fn handle(&mut self, _msg: Unlock, _ctx: &mut Context<Self>) -> Self::Result {
         info!("handling unlock");
         self.status = LockStatus::new();
+        debug!("set status to {:?}", self.status);
         self.issue_system_async(WsUnlockSound {});
     }
 }
@@ -54,6 +54,8 @@ impl Handler<GetLockStatus> for SoundLockActor {
     type Result = Option<LockStatus>;
 
     fn handle(&mut self, _msg: GetLockStatus, _ctx: &mut Context<Self>) -> Self::Result {
-        Some(self.status.clone())
+        let status = self.status.clone();
+        debug!("replying to get lock status with {:?}", status);
+        Some(status)
     }
 }
