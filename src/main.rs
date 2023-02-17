@@ -99,7 +99,7 @@ async fn main() {
     }
 
     let http_server_thread = HttpServer::new(move || {
-        let telegram_bot = Bot::from_env().auto_send();
+        let telegram_bot = Bot::from_env();
         let app_name = "muminst-server-rust".to_string();
         let cors = Cors::default()
             .allow_any_origin()

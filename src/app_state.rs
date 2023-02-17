@@ -16,6 +16,6 @@ pub struct AppState {
     pub discord_guild_id: u64,
     pub database_pool: DatabasePool,
     pub audio_folder_path: String,
-    pub telegram_bot: AutoSend<Bot>,
+    pub telegram_bot: Bot,
     pub telegram_chat_id: String,
 }
